@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fantasy Survivor — Season 50</title>
+<style>
+  :root{
+    --bg:#0c0a09; --panel:#1c1917; --panel2:#262220; --line:#2f2a27;
+    --text:#fafaf9; --muted:#a8a29e; --faint:#78716c;
+    --accent:#f59e0b; --accent2:#f97316;
+    --t1:#f59e0b; /* Tony + Karina */
+    --t2:#2dd4bf; /* Megan + Jake */
+    --t3:#a78bfa; /* Will + Kathleen + Anna */
+    --t4:#fb7185; /* Kenny + Lena */
+    --gold:#fcd34d; --silver:#cbd5e1; --bronze:#d6a07a;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
+  #app{max-width:1080px;margin:0 auto;padding:0 16px 64px}
+  a{color:inherit}
+  /* header */
+  .header{text-align:center;padding:36px 0 18px}
+  .torch{font-size:42px;line-height:1}
+  .header h1{font-size:30px;font-weight:800;letter-spacing:-.02em;margin-top:6px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .header .sub{color:var(--muted);font-size:14px;margin-top:4px}
+  .header .pill{display:inline-block;margin-top:12px;font-size:12px;color:var(--faint);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+  /* tabs */
+  .tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:8px 0 22px;
+    position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 70%,transparent);padding:10px 0;z-index:20}
+  .tab{cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);padding:8px 16px;border-radius:999px;
+    border:1px solid transparent;transition:.15s;user-select:none}
+  .tab:hover{color:var(--text);background:var(--panel)}
+  .tab.active{color:#1c1917;background:linear-gradient(90deg,var(--accent),var(--accent2));border-color:transparent}
+  /* panels */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+  .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px;font-weight:700}
+  .grid{display:grid;gap:12px}
+  /* standings */
+  .stand{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:var(--panel2);
+    border:1px solid var(--line);position:relative;overflow:hidden}
+  .stand .bar{position:absolute;left:0;top:0;bottom:0;width:6px}
+  .stand .rk{font-size:20px;font-weight:800;width:34px;text-align:center;color:var(--faint)}
+  .stand.win .rk{color:var(--gold)}
+  .stand .nm{font-weight:700;font-size:16px;flex:1}
+  .stand .nm small{display:block;font-weight:500;color:var(--faint);font-size:12px;margin-top:1px}
+  .stand .pts{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  .stand .pts span{font-size:12px;color:var(--muted);font-weight:600}
+  .crown{font-size:16px}
+  /* chart */
+  .chartwrap{overflow-x:auto}
+  svg{display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+  .legend .dot{width:11px;height:11px;border-radius:3px}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;cursor:pointer;user-select:none;white-space:nowrap}
+  th.sorted::after{content:" \25BC";font-size:9px;color:var(--accent)}
+  th.sorted.asc::after{content:" \25B2"}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  .teamtag{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .teamtag .dot{width:9px;height:9px;border-radius:3px}
+  .eliminated{color:var(--faint)}
+  .pos{color:#4ade80}.neg{color:#f87171}
+  /* team cards */
+  .teamcard h3{font-size:16px;display:flex;align-items:center;gap:9px;margin-bottom:2px}
+  .teamcard .tot{margin-left:auto;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .roster{margin-top:12px;display:grid;gap:7px}
+  .player{display:flex;align-items:center;gap:10px;font-size:14px}
+  .player .pn{width:96px;flex:none;font-weight:600}
+  .player .track{flex:1;height:9px;background:var(--panel2);border-radius:6px;overflow:hidden}
+  .player .fill{height:100%;border-radius:6px}
+  .player .pp{width:40px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  /* stat cards */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  .stat .v{font-size:26px;font-weight:800;margin-top:6px;line-height:1.1}
+  .stat .d{font-size:12px;color:var(--faint);margin-top:4px}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:26px}
+  .spark i{flex:1;background:var(--line);border-radius:1px;min-height:2px}
+  .footer{text-align:center;color:var(--faint);font-size:12px;margin-top:26px}
+  .hide{display:none}
+  .note{font-size:12px;color:var(--faint);margin-top:10px}
+  @media(max-width:560px){.player .pn{width:74px}.header h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div class="torch">🔥</div>
+    <h1>Fantasy Survivor</h1>
+    <div class="sub">Season 50 — Friends League</div>
+    <div class="pill">PROTOTYPE · real Season 50 data · design preview</div>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="content"></div>
+  <div class="footer">Prototype built from your Season 50 sheet · data shown is read-only · final app will auto-sync from the Google Sheet</div>
+</div>
+
+<script>
+/* ───────────────── DATA (from Season 50 sheet) ───────────────── */
+const TEAMS = [
+  {id:'t4', name:'Kenny + Lena',            color:'var(--t4)', hex:'#fb7185'},
+  {id:'t1', name:'Tony + Karina',           color:'var(--t1)', hex:'#f59e0b'},
+  {id:'t2', name:'Megan + Jake',            color:'var(--t2)', hex:'#2dd4bf'},
+  {id:'t3', name:'Will + Kathleen + Anna',  color:'var(--t3)', hex:'#a78bfa'},
+];
+const TEAM_HEX = {}; TEAMS.forEach(t=>TEAM_HEX[t.name]=t.hex);
+
+// weekly points per contestant (Weeks 1–13), with team
+const CONTESTANTS = [
+  {n:'Angelina', team:'Tony + Karina',          w:[8,6,3,3,0,0,0,0,0,0,0,0,0]},
+  {n:'Aubry',    team:'Tony + Karina',          w:[8,6,7,8,5,6,6,12,6,6,6,12,134]},
+  {n:'Charlie',  team:'Kenny + Lena',           w:[9,7,9,5,0,0,0,0,0,0,0,0,0]},
+  {n:'Chrissy',  team:'Kenny + Lena',           w:[9,7,7,8,5,8,6,0,0,0,0,0,0]},
+  {n:'Christian',team:'Megan + Jake',           w:[3,9,4,3,3,12,8,6,0,0,0,0,0]},
+  {n:'Cirie',    team:'Will + Kathleen + Anna', w:[3,6,9,5,3,6,6,7,6,6,10,8,0]},
+  {n:'Coach',    team:'Will + Kathleen + Anna', w:[11,7,7,8,5,6,6,0,0,0,0,0,0]},
+  {n:'Colby',    team:'Kenny + Lena',           w:[8,6,7,8,5,-3,0,0,0,0,0,0,0]},
+  {n:'Dee',      team:'Will + Kathleen + Anna', w:[9,7,9,5,3,12,2,0,0,0,0,0,0]},
+  {n:'Emily',    team:'Megan + Jake',           w:[3,6,3,3,3,6,8,6,6,6,0,0,0]},
+  {n:'Genevieve',team:'Kenny + Lena',           w:[11,7,7,11,5,0,0,0,0,0,0,0,0]},
+  {n:'Jenna',    team:'Tony + Karina',          w:[0,0,0,0,0,0,0,0,0,0,0,0,0]},
+  {n:'Joe',      team:'Tony + Karina',          w:[3,6,7,8,5,6,8,14,12,6,6,24,12]},
+  {n:'Jonathan', team:'Will + Kathleen + Anna', w:[9,7,9,5,3,8,6,6,6,6,14,12,53]},
+  {n:'Kamilla',  team:'Megan + Jake',           w:[9,7,9,5,3,2,0,0,0,0,0,0,0]},
+  {n:'Kyle',     team:'Will + Kathleen + Anna', w:[8,0,0,0,0,0,0,0,0,0,0,0,0]},
+  {n:'Mike',     team:'Tony + Karina',          w:[9,7,3,0,0,0,0,0,0,0,0,0,0]},
+  {n:'Ozzy',     team:'Megan + Jake',           w:[5,6,3,3,3,8,14,6,6,6,-6,0,0]},
+  {n:'Q',        team:'Kenny + Lena',           w:[8,6,-3,0,0,0,0,0,0,0,0,0,0]},
+  {n:'Rick',     team:'Kenny + Lena',           w:[3,8,9,5,3,6,8,6,6,11,14,0,0]},
+  {n:'Rizo',     team:'Megan + Jake',           w:[8,6,9,5,3,6,6,6,6,6,6,14,6]},
+  {n:'Savannah', team:'Will + Kathleen + Anna', w:[5,3,1,0,0,0,0,0,0,0,0,0,0]},
+  {n:'Stephenie',team:'Tony + Karina',          w:[8,6,3,3,3,16,10,6,6,4,0,0,0]},
+  {n:'Tiffany',  team:'Megan + Jake',           w:[9,7,7,8,5,8,6,14,6,12,6,18,0]},
+];
+CONTESTANTS.forEach(c=>c.total=c.w.reduce((a,b)=>a+b,0));
+
+// team rank by week (Weeks 1–13)
+const RANKS = {
+  'Kenny + Lena':          [1,1,1,1,1,2,2,3,4,4,4,4,4],
+  'Megan + Jake':          [3,2,2,2,2,1,1,1,1,1,1,1,2],
+  'Will + Kathleen + Anna':[2,3,3,3,3,3,3,2,3,3,3,3,3],
+  'Tony + Karina':         [4,4,4,4,4,4,4,4,2,2,2,2,1],
+};
+// weekly highlights (top contestant / top team that week)
+const WEEKLY = [
+  {wk:1, c:'Genevieve & Coach', cp:11, t:'Kenny + Lena', tp:48},
+  {wk:2, c:'Christian', cp:9,  t:'Megan + Jake', tp:41},
+  {wk:3, c:'Rizo', cp:9,       t:'Kenny + Lena', tp:36},
+  {wk:4, c:'Genevieve', cp:11, t:'Kenny + Lena', tp:37},
+  {wk:5, c:'Tiffany', cp:5,    t:'Megan + Jake', tp:20},
+  {wk:6, c:'Stephenie', cp:16, t:'Megan + Jake', tp:42},
+  {wk:7, c:'Ozzy', cp:14,      t:'Megan + Jake', tp:42},
+  {wk:8, c:'Tiffany', cp:14,   t:'Megan + Jake', tp:38},
+  {wk:9, c:'Joe', cp:12,       t:'Tony + Karina', tp:24},
+  {wk:10,c:'Tiffany', cp:12,   t:'Megan + Jake', tp:30},
+  {wk:11,c:'Rick', cp:14,      t:'Will + Kathleen + Anna', tp:24},
+  {wk:12,c:'Joe', cp:16,       t:'Tony + Karina', tp:22},
+  {wk:13,c:'Aubry', cp:134,    t:'Tony + Karina', tp:146},
+];
+// season history
+const HISTORY = [
+  {s:50, rows:[['Tony + Karina',443],['Megan + Jake',380],['Will + Kathleen + Anna',333],['Kenny + Lena',242]]},
+  {s:49, rows:[['Will + Kathleen + Anna',330],['Megan + Jake',254],['Kenny + Lena',252],['Tony + Karina',184]]},
+  {s:48, rows:[['Kenny + Lena',288],['Megan + Jake',260],['Will + Kathleen + Anna',258],['Tony + Karina',222]]},
+  {s:47, rows:[['Megan + Jake',323],['Tony + Karina',275],['Kenny + Lena',244],['Will + Kathleen + Anna',143]]},
+  {s:46, rows:[['Kenny + Lena',283],['Tony + Karina',271],['Megan + Jake',269],['Will',128]]},
+];
+const NWEEKS = 13;
+
+/* ───────────────── derived ───────────────── */
+function teamTotals(){
+  const m={}; TEAMS.forEach(t=>m[t.name]=0);
+  CONTESTANTS.forEach(c=>m[c.team]+=c.total);
+  return TEAMS.map(t=>({...t,total:m[t.name]})).sort((a,b)=>b.total-a.total);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* ───────────────── tabs ───────────────── */
+const TABS=[['leaderboard','Leaderboard'],['teams','Teams'],['contestants','Contestants'],['stats','Stats'],['history','History']];
+let active='leaderboard';
+function renderTabs(){
+  document.getElementById('tabs').innerHTML=TABS.map(([id,label])=>
+    `<div class="tab ${id===active?'active':''}" onclick="go('${id}')">${label}</div>`).join('');
+}
+function go(id){active=id;renderTabs();render();window.scrollTo({top:0,behavior:'smooth'})}
+
+/* ───────────────── views ───────────────── */
+function viewLeaderboard(){
+  const tt=teamTotals();
+  const medals=['👑','🥈','🥉',''];
+  const max=tt[0].total;
+  let cards=tt.map((t,i)=>`
+    <div class="stand ${i===0?'win':''}">
+      <div class="bar" style="background:${t.hex}"></div>
+      <div class="rk">${i+1}</div>
+      <div class="nm">${esc(t.name)} ${i===0?'<span class="crown">👑</span>':''}<small>${i===0?'Season 50 Champion':''}</small></div>
+      <div class="pts">${t.total}<span> pts</span></div>
+    </div>`).join('');
+  return `
+  <div class="panel">
+    <h2>Final Standings</h2>
+    <div class="grid">${cards}</div>
+  </div>
+  <div class="panel">
+    <h2>Rank Through The Season</h2>
+    <div class="chartwrap">${rankChart()}</div>
+    <div class="legend">${TEAMS.map(t=>`<div class="item"><span class="dot" style="background:${t.hex}"></span>${esc(t.name)}</div>`).join('')}</div>
+    <div class="note">Lower is better — line at the top = 1st place. Tony + Karina surged from last to champion in the back half.</div>
+  </div>
+  <div class="panel">
+    <h2>Weekly Highlights</h2>
+    <table>
+      <thead><tr><th>Wk</th><th>Top Contestant</th><th class="num">Pts</th><th>Top Team</th><th class="num">Pts</th></tr></thead>
+      <tbody>${WEEKLY.map(w=>`<tr>
+        <td>${w.wk}</td>
+        <td>${esc(w.c)}</td><td class="num">${w.cp}</td>
+        <td><span class="teamtag"><span class="dot" style="background:${TEAM_HEX[w.t]||'#888'}"></span>${esc(w.t)}</span></td>
+        <td class="num">${w.tp}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function rankChart(){
+  const W=Math.max(640, NWEEKS*48), H=260, padL=34, padR=14, padT=18, padB=28;
+  const x=i=>padL+(W-padL-padR)*(i/(NWEEKS-1));
+  const y=r=>padT+((H-padT-padB))*((r-1)/(TEAMS.length-1));
+  let g='';
+  for(let r=1;r<=4;r++){g+=`<line x1="${padL}" x2="${W-padR}" y1="${y(r)}" y2="${y(r)}" stroke="var(--line)"/>`+
+    `<text x="${padL-8}" y="${y(r)+4}" fill="var(--faint)" font-size="11" text-anchor="end">${r}</text>`;}
+  for(let i=0;i<NWEEKS;i++){g+=`<text x="${x(i)}" y="${H-8}" fill="var(--faint)" font-size="10" text-anchor="middle">${i+1}</text>`;}
+  let lines='';
+  TEAMS.forEach(t=>{
+    const pts=RANKS[t.name].map((r,i)=>`${x(i)},${y(r)}`).join(' ');
+    lines+=`<polyline points="${pts}" fill="none" stroke="${t.hex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" opacity=".92"/>`;
+    RANKS[t.name].forEach((r,i)=>{lines+=`<circle cx="${x(i)}" cy="${y(r)}" r="${i===NWEEKS-1?4:2.5}" fill="${t.hex}"/>`;});
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${g}${lines}</svg>`;
+}
+
+function viewTeams(){
+  const tt=teamTotals();
+  return tt.map(t=>{
+    const roster=CONTESTANTS.filter(c=>c.team===t.name).sort((a,b)=>b.total-a.total);
+    const mx=Math.max(...roster.map(c=>c.total),1);
+    return `<div class="panel teamcard">
+      <h3><span class="dot" style="width:12px;height:12px;border-radius:4px;background:${t.hex};display:inline-block"></span>${esc(t.name)}<span class="tot">${t.total}</span></h3>
+      <div class="roster">${roster.map(c=>{
+        const elim=c.total===0;
+        return `<div class="player">
+          <div class="pn ${elim?'eliminated':''}">${esc(c.n)}</div>
+          <div class="track"><div class="fill" style="width:${Math.max(2,c.total/mx*100)}%;background:${t.hex};opacity:${elim?.25:.85}"></div></div>
+          <div class="pp">${c.total}</div></div>`;}).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+let cSort={key:'total',asc:false};
+function viewContestants(){
+  return `<div class="panel">
+    <h2>All Contestants</h2>
+    <table id="ctab">
+      <thead><tr>
+        <th onclick="sortC('n')">Contestant</th>
+        <th onclick="sortC('team')">Team</th>
+        <th onclick="sortC('best')" class="num">Best Wk</th>
+        <th onclick="sortC('total')" class="num">Total</th>
+        <th>Trend</th>
+      </tr></thead>
+      <tbody>${contestantRows()}</tbody>
+    </table>
+    <div class="note">Click any column header to sort. “Trend” shows weekly points across the 13 episodes.</div>
+  </div>`;
+}
+function contestantRows(){
+  const rows=CONTESTANTS.map(c=>({...c,best:Math.max(...c.w)}));
+  rows.sort((a,b)=>{
+    let v;const k=cSort.key;
+    if(k==='n'||k==='team')v=String(a[k]).localeCompare(String(b[k]));
+    else v=a[k]-b[k];
+    return cSort.asc?v:-v;
+  });
+  const mxw=Math.max(...CONTESTANTS.flatMap(c=>c.w));
+  return rows.map(c=>{
+    const elim=c.total===0;
+    const spark=`<div class="spark">${c.w.map(v=>`<i style="height:${v<=0?2:Math.max(8,v/mxw*100)}%;background:${v<0?'#f87171':TEAM_HEX[c.team]};opacity:${v===0?.2:.8}"></i>`).join('')}</div>`;
+    return `<tr>
+      <td class="${elim?'eliminated':''}">${esc(c.n)}</td>
+      <td><span class="teamtag"><span class="dot" style="background:${TEAM_HEX[c.team]}"></span>${esc(c.team.replace('Will + Kathleen + Anna','Will + K + A'))}</span></td>
+      <td class="num">${Math.max(...c.w)}</td>
+      <td class="num"><b>${c.total}</b></td>
+      <td style="min-width:160px">${spark}</td>
+    </tr>`;
+  }).join('');
+}
+function sortC(k){if(cSort.key===k)cSort.asc=!cSort.asc;else{cSort.key=k;cSort.asc=(k==='n'||k==='team');}render();}
+
+function viewStats(){
+  const tt=teamTotals();
+  const top=[...CONTESTANTS].sort((a,b)=>b.total-a.total);
+  let bestWk={p:'',v:-99,wk:0};
+  CONTESTANTS.forEach(c=>c.w.forEach((v,i)=>{if(v>bestWk.v){bestWk={p:c.n,v,wk:i+1}}}));
+  const spread=tt[0].total-tt[tt.length-1].total;
+  const allPts=CONTESTANTS.reduce((a,c)=>a+c.total,0);
+  // biggest weekly team haul
+  let bestTeamWk={t:'',v:-99,wk:0};
+  TEAMS.forEach(t=>{for(let i=0;i<NWEEKS;i++){const s=CONTESTANTS.filter(c=>c.team===t.name).reduce((a,c)=>a+c.w[i],0);if(s>bestTeamWk.v)bestTeamWk={t:t.name,v:s,wk:i+1}}});
+  const negs=CONTESTANTS.flatMap(c=>c.w.map((v,i)=>({c:c.n,v,wk:i+1}))).filter(x=>x.v<0).sort((a,b)=>a.v-b.v);
+  return `
+  <div class="panel"><h2>Season Records</h2>
+    <div class="stats">
+      <div class="stat"><div class="k">Champion</div><div class="v" style="color:${tt[0].hex}">${esc(tt[0].name)}</div><div class="d">${tt[0].total} pts</div></div>
+      <div class="stat"><div class="k">Top Contestant</div><div class="v">${esc(top[0].n)}</div><div class="d">${top[0].total} pts · ${esc(top[0].team)}</div></div>
+      <div class="stat"><div class="k">Biggest Single Week</div><div class="v">${bestWk.v}</div><div class="d">${esc(bestWk.p)} · Week ${bestWk.wk} (the finale)</div></div>
+      <div class="stat"><div class="k">Best Team Week</div><div class="v">${bestTeamWk.v}</div><div class="d">${esc(bestTeamWk.t)} · Week ${bestTeamWk.wk}</div></div>
+      <div class="stat"><div class="k">Margin of Victory</div><div class="v">${spread}</div><div class="d">1st vs 4th place</div></div>
+      <div class="stat"><div class="k">Total Points Scored</div><div class="v">${allPts}</div><div class="d">across all 24 contestants</div></div>
+    </div>
+  </div>
+  <div class="panel"><h2>Top 5 Contestants</h2>
+    <table><thead><tr><th>#</th><th>Contestant</th><th>Team</th><th class="num">Points</th></tr></thead>
+    <tbody>${top.slice(0,5).map((c,i)=>`<tr><td>${i+1}</td><td>${esc(c.n)}</td>
+      <td><span class="teamtag"><span class="dot" style="background:${TEAM_HEX[c.team]}"></span>${esc(c.team)}</span></td>
+      <td class="num"><b>${c.total}</b></td></tr>`).join('')}</tbody></table>
+  </div>
+  <div class="panel"><h2>Ouch — Negative Weeks</h2>
+    ${negs.length?`<table><thead><tr><th>Contestant</th><th class="num">Week</th><th class="num">Pts</th></tr></thead>
+    <tbody>${negs.map(n=>`<tr><td>${esc(n.c)}</td><td class="num">${n.wk}</td><td class="num neg">${n.v}</td></tr>`).join('')}</tbody></table>`:'<div class="note">No negative weeks.</div>'}
+    <div class="note">Negative scores come from penalties like losing a vote (-3) or being voted off with an idol in pocket (-6).</div>
+  </div>`;
+}
+
+function viewHistory(){
+  // all-time: championships + avg
+  const agg={};
+  HISTORY.forEach(s=>s.rows.forEach((r,i)=>{
+    let name=r[0]==='Will'?'Will + Kathleen + Anna':r[0];
+    agg[name]=agg[name]||{titles:0,sum:0,n:0,high:0};
+    if(i===0)agg[name].titles++;
+    agg[name].sum+=r[1];agg[name].n++;agg[name].high=Math.max(agg[name].high,r[1]);
+  }));
+  const alltime=Object.entries(agg).map(([name,v])=>({name,titles:v.titles,avg:(v.sum/v.n),high:v.high}))
+    .sort((a,b)=>b.titles-a.titles||b.avg-a.avg);
+  const seasonTables=HISTORY.map(s=>`
+    <div class="panel"><h2>Season ${s.s}${s.s===50?' · current':''}</h2>
+    <div class="grid">${s.rows.map((r,i)=>{
+      let name=r[0]==='Will'?'Will + Kathleen + Anna':r[0];
+      return `<div class="stand ${i===0?'win':''}"><div class="bar" style="background:${TEAM_HEX[name]||'#777'}"></div>
+        <div class="rk">${i+1}</div><div class="nm">${esc(r[0])}</div><div class="pts">${r[1]}<span> pts</span></div></div>`;
+    }).join('')}</div></div>`).join('');
+  return `
+  <div class="panel"><h2>All-Time (Seasons 46–50)</h2>
+    <table><thead><tr><th>Team</th><th class="num">🏆 Titles</th><th class="num">Avg Pts</th><th class="num">Best</th></tr></thead>
+    <tbody>${alltime.map(t=>`<tr><td><span class="teamtag"><span class="dot" style="background:${TEAM_HEX[t.name]||'#777'}"></span>${esc(t.name)}</span></td>
+      <td class="num"><b>${t.titles}</b></td><td class="num">${t.avg.toFixed(1)}</td><td class="num">${t.high}</td></tr>`).join('')}</tbody></table>
+    <div class="note">Megan + Jake are the consistency kings (highest average); titles are spread around.</div>
+  </div>
+  ${seasonTables}`;
+}
+
+function render(){
+  const v={leaderboard:viewLeaderboard,teams:viewTeams,contestants:viewContestants,stats:viewStats,history:viewHistory}[active];
+  document.getElementById('content').innerHTML=v();
+}
+renderTabs();render();
+</script>
+</body>
+</html>
