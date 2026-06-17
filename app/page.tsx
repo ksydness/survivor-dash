@@ -29,8 +29,8 @@ export default async function Home() {
               background: '#1c1917', border: '1px solid #2f2a27', borderRadius: 14,
               padding: '16px 20px', textDecoration: 'none', color: '#fafaf9' }}>
             <span style={{ fontWeight: 700 }}>{s.name || `Season ${s.season}`}</span>
-            <span style={{ fontSize: 12, color: s.status === 'active' ? '#f59e0b' : '#78716c' }}>
-              {s.status === 'active' ? '● live' : 'final'}
+            <span style={{ fontSize: 12, color: s.status === 'final' ? '#78716c' : '#f59e0b' }}>
+              {s.status === 'active' ? '● live' : s.status === 'drafting' ? '● drafting' : 'final'}
             </span>
           </Link>
         ))}

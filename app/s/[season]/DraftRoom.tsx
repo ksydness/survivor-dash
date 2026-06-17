@@ -14,7 +14,7 @@ const colorFor = (t: string, i = 0) => PRESET[t] ?? FALLBACK[i % FALLBACK.length
 const PICK_SECONDS = 45;
 
 interface Pick { overall: number; round: number; teamIndex: number; contestant: string; }
-interface Persisted { order: number[]; picks: Pick[]; phase: 'setup' | 'drafting' | 'done'; }
+interface Persisted { order: number[]; picks: Pick[]; phase: 'setup' | 'drafting' | 'done'; rounds: number; }
 
 export default function DraftRoom({ season }: { season: number }) {
   const [data, setData] = useState<DraftData | null>(null);
@@ -22,6 +22,7 @@ export default function DraftRoom({ season }: { season: number }) {
   const [phase, setPhase] = useState<'setup' | 'drafting' | 'done'>('setup');
   const [order, setOrder] = useState<number[]>([]);      // team indices, round-1 order
   const [picks, setPicks] = useState<Pick[]>([]);
+  const [rounds, setRounds] = useState(0);               // picks per team (0 = use default)
   const [secondsLeft, setSecondsLeft] = useState(PICK_SECONDS);
   const [running, setRunning] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -45,24 +46,29 @@ export default function DraftRoom({ season }: { season: number }) {
   useEffect(() => {
     if (!data || loaded.current) return;
     loaded.current = true;
+    const defaultRounds = Math.max(1, Math.floor(data.cast.length / (data.teams.length || 1)));
     try {
       const raw = localStorage.getItem(lsKey);
       if (raw) {
         const s: Persisted = JSON.parse(raw);
         setOrder(s.order || []); setPicks(s.picks || []); setPhase(s.phase || 'setup');
+        setRounds(s.rounds || defaultRounds);
+        return;
       }
     } catch { /* ignore */ }
+    setRounds(defaultRounds);
   }, [data, lsKey]);
 
   // persist
   useEffect(() => {
     if (!loaded.current) return;
-    try { localStorage.setItem(lsKey, JSON.stringify({ order, picks, phase } as Persisted)); } catch { /* ignore */ }
-  }, [order, picks, phase, lsKey]);
+    try { localStorage.setItem(lsKey, JSON.stringify({ order, picks, phase, rounds } as Persisted)); } catch { /* ignore */ }
+  }, [order, picks, phase, rounds, lsKey]);
 
   const teams = data?.teams ?? [];
   const cast = data?.cast ?? [];
-  const picksPerTeam = teams.length ? Math.floor(cast.length / teams.length) : 0;
+  const maxRounds = teams.length ? Math.floor(cast.length / teams.length) : 0;
+  const picksPerTeam = rounds > 0 ? Math.min(rounds, maxRounds) : maxRounds;
   const totalPicks = picksPerTeam * teams.length;
   const overall = picks.length;
   const onClockTeam = useMemo(() => {
@@ -208,11 +214,20 @@ export default function DraftRoom({ season }: { season: number }) {
                 ))}
               </ol>
             )}
+          <div className="rounds">
+            <span className="dim">Picks per team:</span>
+            <button className="step" onClick={() => setRounds(r => Math.max(1, (r || maxRounds) - 1))} disabled={picksPerTeam <= 1}>−</button>
+            <b>{picksPerTeam}</b>
+            <button className="step" onClick={() => setRounds(r => Math.min(maxRounds, (r || maxRounds) + 1))} disabled={picksPerTeam >= maxRounds}>+</button>
+          </div>
+          <p className="dim small">
+            {cast.length} contestants · {teams.length} teams · {picksPerTeam * teams.length} of {cast.length} drafted
+            {picksPerTeam * teams.length < cast.length ? ` · ${cast.length - picksPerTeam * teams.length} left undrafted` : ''}
+          </p>
           <div className="row">
             <button className="btn" onClick={shuffleOrder}>🎲 {order.length ? 'Re-roll' : 'Generate'} order</button>
             {order.length > 0 && <button className="btn primary" onClick={startDraft}>Start draft →</button>}
           </div>
-          <p className="dim small">{cast.length} contestants · {teams.length} teams · {picksPerTeam} rounds</p>
         </div>
       )}
 
@@ -266,11 +281,10 @@ export default function DraftRoom({ season }: { season: number }) {
               <tbody>
                 {Array.from({ length: picksPerTeam }, (_, r) => {
                   const reversed = r % 2 === 1;
-                  const cols = reversed ? [...order].reverse() : order;
                   return (
                     <tr key={r}>
                       <td className="rnd">R{r + 1} {reversed ? '←' : '→'}</td>
-                      {cols.map((ti) => {
+                      {order.map((ti) => {
                         const pk = picks.find(p => p.round === r + 1 && p.teamIndex === ti);
                         const isCurrent = phase === 'drafting' && onClockTeam === ti && currentRound === r + 1;
                         return (
@@ -358,6 +372,9 @@ const CSS = `
 .btn.ghost{background:transparent}.btn.ghost.danger{color:#f87171;border-color:#5b2626}
 .btn.tiny{padding:5px 10px;font-size:12px;margin-left:12px}
 .row{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.rounds{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:16px;font-size:16px;font-weight:800}
+.rounds .step{width:34px;height:34px;border-radius:9px;background:#262220;border:1px solid #3a342f;color:#fafaf9;font-size:18px;font-weight:800;cursor:pointer}
+.rounds .step:disabled{opacity:.4;cursor:default}
 .orderlist{list-style:none;max-width:360px;margin:0 auto;display:grid;gap:8px}
 .orderlist li{display:flex;align-items:center;gap:10px;background:#262220;border:1px solid #2f2a27;border-radius:12px;padding:11px 14px;font-weight:700}
 .orderlist .ord{width:22px;color:#78716c}
