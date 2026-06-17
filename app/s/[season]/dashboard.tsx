@@ -100,22 +100,26 @@ function Leaderboard({ d }: { d: SeasonPayload }) {
           ))}
         </div>
       </div>
-      <div className="panel">
-        <h2>Rank Through The Season</h2>
-        <div className="chartwrap"><RankChart d={d} /></div>
-        <div className="legend">
-          {tt.map((t, i) => <div key={t.team} className="item"><span className="dot" style={{ background: colorFor(t.team, i) }} />{t.team}</div>)}
+      {Object.keys(d.ranks).length > 0 && (
+        <div className="panel">
+          <h2>Rank Through The Season</h2>
+          <div className="chartwrap"><RankChart d={d} /></div>
+          <div className="legend">
+            {tt.map((t, i) => <div key={t.team} className="item"><span className="dot" style={{ background: colorFor(t.team, i) }} />{t.team}</div>)}
+          </div>
         </div>
-      </div>
-      <div className="panel">
-        <h2>Weekly Highlights</h2>
-        <table><thead><tr><th>Wk</th><th>Top Contestant</th><th className="num">Pts</th><th>Top Team</th><th className="num">Pts</th></tr></thead>
-          <tbody>{d.highlights.map(h => (
-            <tr key={h.week}><td>{h.week}</td><td>{h.top_contestant}</td><td className="num">{h.top_contestant_pts}</td>
-              <td><span className="teamtag"><span className="dot" style={{ background: colorFor(h.top_team || '') }} />{h.top_team}</span></td>
-              <td className="num">{h.top_team_pts}</td></tr>
-          ))}</tbody></table>
-      </div>
+      )}
+      {d.highlights.length > 0 && (
+        <div className="panel">
+          <h2>Weekly Highlights</h2>
+          <table><thead><tr><th>Wk</th><th>Top Contestant</th><th className="num">Pts</th><th>Top Team</th><th className="num">Pts</th></tr></thead>
+            <tbody>{d.highlights.map(h => (
+              <tr key={h.week}><td>{h.week}</td><td>{h.top_contestant}</td><td className="num">{h.top_contestant_pts}</td>
+                <td><span className="teamtag"><span className="dot" style={{ background: colorFor(h.top_team || '') }} />{h.top_team}</span></td>
+                <td className="num">{h.top_team_pts}</td></tr>
+            ))}</tbody></table>
+        </div>
+      )}
     </>
   );
 }

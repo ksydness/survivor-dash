@@ -61,21 +61,24 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
   const reg = await getSeasons(fresh);
   const row = reg.find(r => r.season === season);
   if (!row) return null;
-  if (!row.urls.episodes || !row.urls.contestants || !row.urls.leaderboard) {
-    throw new Error(`Season ${season} is missing one or more CSV URLs in the Seasons tab`);
+  if (!row.urls.episodes || !row.urls.contestants) {
+    throw new Error(`Season ${season} needs at least Episodes and Contestants CSV URLs in the Seasons tab`);
   }
 
+  // Leaderboard is optional — older/simpler seasons may not have one. Without it
+  // there's no rank chart or weekly highlights, but standings (computed from
+  // contestant points), teams, contestants and stats still render.
   const [epRows, coRows, lbRows, history] = await Promise.all([
     fetchCsv(row.urls.episodes, { fresh }),
     fetchCsv(row.urls.contestants, { fresh }),
-    fetchCsv(row.urls.leaderboard, { fresh }),
+    row.urls.leaderboard ? fetchCsv(row.urls.leaderboard, { fresh }) : Promise.resolve(null),
     getHistory(fresh),
   ]);
 
   const numWeeks = row.num_weeks;
   const consRaw = parseContestants(coRows);
   const scores = parseEpisodes(epRows, numWeeks);
-  const { ranks, highlights } = parseLeaderboard(lbRows, numWeeks);
+  const { ranks, highlights } = lbRows ? parseLeaderboard(lbRows, numWeeks) : { ranks: {}, highlights: [] };
 
   // Build contestants with weekly arrays + totals
   const byName: Record<string, Contestant> = {};

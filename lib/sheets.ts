@@ -67,9 +67,17 @@ export function parseEpisodes(rows: string[][], numWeeks: number) {
   return out;
 }
 
-/** Contestants tab: col A = name, col B = team, (col D = round drafted). */
+/** Does the first row look like a header rather than data? (tolerates header-less tabs) */
+function hasHeader(rows: string[][]): boolean {
+  if (!rows.length) return false;
+  const a = (rows[0][0] || '').trim(), b = (rows[0][1] || '').trim();
+  return /contestant|name|player/i.test(a) || /^team$/i.test(b);
+}
+
+/** Contestants tab: col A = name, col B = team, (col D = round drafted). Header optional. */
 export function parseContestants(rows: string[][]) {
-  return rows.slice(1)
+  const body = hasHeader(rows) ? rows.slice(1) : rows;
+  return body
     .map(r => ({ name: (r[0] || '').trim(), team: (r[1] || '').trim(), draft_round: r[3] ? num(r[3]) : null }))
     .filter(c => c.name && c.team);
 }
@@ -160,7 +168,8 @@ export function parseRegistry(rows: string[][]): RegistryRow[] {
 
 /** Cast list for drafting: contestant names from the Contestants tab (col A), team ignored. */
 export function parseCast(rows: string[][]): string[] {
-  return rows.slice(1).map(r => (r[0] || '').trim()).filter(Boolean);
+  const body = hasHeader(rows) ? rows.slice(1) : rows;
+  return body.map(r => (r[0] || '').trim()).filter(Boolean);
 }
 
 /**
