@@ -58,6 +58,7 @@ function Shell(props: { children: React.ReactNode; title?: string; onRefresh?: (
     <>
       <style>{CSS}</style>
       <div id="app">
+        <div className="topnav"><a href="/">‹ All seasons</a></div>
         <div className="header">
           <div className="torch">🔥</div>
           <h1>{props.title ?? 'Fantasy Survivor'}</h1>
@@ -194,7 +195,8 @@ function Contestants({ d }: { d: SeasonPayload }) {
   return (
     <div className="panel">
       <h2>All Contestants</h2>
-      <table>
+      <div className="scroll">
+      <table className="wide">
         <thead><tr>
           <th onClick={() => sort('name')}>Contestant</th>
           <th onClick={() => sort('team')}>Team</th>
@@ -216,6 +218,8 @@ function Contestants({ d }: { d: SeasonPayload }) {
           </tr>
         ))}</tbody>
       </table>
+      </div>
+      <div className="note">Tip: scroll the table sideways on mobile to see the full trend.</div>
     </div>
   );
 }
@@ -299,6 +303,12 @@ function History({ d }: { d: SeasonPayload }) {
 /* ── styles (shared with prototype/index.html) ── */
 const CSS = `
 #app{max-width:1080px;margin:0 auto;padding:0 16px 64px}
+.topnav{padding:14px 0 0}
+.topnav a{color:#a8a29e;font-size:13px;font-weight:600;text-decoration:none}
+.topnav a:hover{color:#f59e0b}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.wide{min-width:480px}
+.note{font-size:12px;color:#78716c;margin-top:10px}
 .header{text-align:center;padding:32px 0 14px}
 .torch{font-size:40px}
 .header h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-top:6px;background:linear-gradient(90deg,#f59e0b,#f97316);-webkit-background-clip:text;background-clip:text;color:transparent}

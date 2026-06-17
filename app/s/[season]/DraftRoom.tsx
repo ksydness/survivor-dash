@@ -343,6 +343,7 @@ function ExportBlock({ title, text }: { title: string; text: string }) {
 function Shell({ children, title }: { children: React.ReactNode; title?: string }) {
   return (
     <div id="app">
+      <div className="topnav"><a href="/">‹ All seasons</a></div>
       <div className="header">
         <div className="torch">🔥</div>
         <h1>{title ?? 'Draft Room'}</h1>
@@ -356,6 +357,9 @@ function Shell({ children, title }: { children: React.ReactNode; title?: string 
 
 const CSS = `
 #app{max-width:1080px;margin:0 auto;padding:0 16px 80px}
+.topnav{padding:14px 0 0}
+.topnav a{color:#a8a29e;font-size:13px;font-weight:600;text-decoration:none}
+.topnav a:hover{color:#f59e0b}
 .header{text-align:center;padding:28px 0 10px}
 .torch{font-size:38px}
 .header h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px;background:linear-gradient(90deg,#f59e0b,#f97316);-webkit-background-clip:text;background-clip:text;color:transparent}
