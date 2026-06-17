@@ -58,7 +58,12 @@ The app is driven by a **Seasons control tab** so all commissioner actions happe
 (never in code or a separate admin tool). One-time setup: publish that tab to web as CSV and set
 `SEASONS_CSV_URL`.
 
-**Seasons tab** columns: `Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks`
+**Seasons tab** columns: `Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks | Teams`
+
+- `Status` is one of: `drafting` (show the draft room), `active` (normal dashboard), `final` (over).
+- `Teams` (optional, last column): the league's teams pipe-separated, e.g.
+  `Kenny + Lena|Tony + Karina|Megan + Jake|Will + Kathleen + Anna`. Used by the draft room; if blank
+  it falls back to the distinct teams already in the Contestants tab.
 
 - **Start a new season**: copy last season's sheet (keeps Apps Script + Scoring + Input), run the
   draft, fill the **Contestants** tab (name + team), publish the new sheet's tabs to web as CSV,
@@ -66,6 +71,22 @@ The app is driven by a **Seasons control tab** so all commissioner actions happe
   `/s/<n>` automatically.
 - **End a season**: set that row's `Status` to `final`. Live badge drops; the dashboard reads its
   final numbers straight from the sheet.
+
+### Draft room (`status = drafting`)
+
+When a season's `Status` is `drafting`, `/s/<n>` renders a client-side snake-draft room
+(`app/s/[season]/DraftRoom.tsx`) instead of the dashboard — built for one shared screen at an
+in-person draft. No backend: all draft state lives in the browser and is saved to `localStorage`
+(key `survivor-draft-s<n>`) so a refresh resumes. Data comes from `/api/draft/[season]`
+(`getDraftData`): the **cast** = contestant names in the Contestants tab (col A, team ignored), and
+the **teams** = the Seasons-tab `Teams` column.
+
+Flow: randomize draft order → 45-second visual countdown per pick (warning + buzzer at 0:00, never
+auto-picks) → click a contestant's Draft button to assign them and advance (snake order) → live
+draft board grid → confetti on the final pick → copy-paste exports for the **Contestants** tab
+(name + team) and the **Draft** tab. After drafting, paste the results in and flip `Status` to
+`active`. To run a draft: set `Status = drafting`, put the cast names in the Contestants tab, and
+fill the `Teams` column.
 - **New teams**: just the `team` column on the Contestants tab — no separate setup. Team colors are
   auto-assigned in `dashboard.tsx` (`TEAM_COLORS` has nice presets + a fallback palette; add a
   name there only if you want a specific color).

@@ -9,9 +9,9 @@
 
 import {
   fetchCsv, parseRegistry, parseHistory, parseEpisodes, parseContestants,
-  parseLeaderboard, RegistryRow,
+  parseLeaderboard, parseCast, RegistryRow,
 } from './sheets';
-import type { SeasonPayload, Contestant, SeasonMeta } from './types';
+import type { SeasonPayload, Contestant, SeasonMeta, DraftData } from './types';
 
 const SEASONS_CSV_URL = () => requireEnv('SEASONS_CSV_URL');
 const HISTORY_CSV_URL = () => process.env.HISTORY_CSV_URL; // optional
@@ -26,6 +26,26 @@ function requireEnv(name: string): string {
 export async function getSeasons(fresh = false): Promise<RegistryRow[]> {
   const rows = await fetchCsv(SEASONS_CSV_URL(), { fresh });
   return parseRegistry(rows).sort((a, b) => b.season - a.season);
+}
+
+/** Data for the draft room: the cast (contestant names) + the league's teams. */
+export async function getDraftData(season: number, fresh = false): Promise<DraftData | null> {
+  const reg = await getSeasons(fresh);
+  const row = reg.find(r => r.season === season);
+  if (!row) return null;
+  if (!row.urls.contestants) throw new Error(`Season ${season} is missing its Contestants CSV URL`);
+
+  const coRows = await fetchCsv(row.urls.contestants, { fresh });
+  const cast = parseCast(coRows);
+
+  let teams = row.teams.length ? row.teams : [];
+  if (!teams.length) {
+    // fallback: distinct non-empty team values already in the Contestants tab
+    const seen = new Set<string>();
+    coRows.slice(1).forEach(r => { const t = (r[1] || '').trim(); if (t) seen.add(t); });
+    teams = [...seen];
+  }
+  return { meta: { season: row.season, name: row.name, status: row.status }, teams, cast };
 }
 
 /** Read all-time History tab (tidy: Season | Place | Team | Points). */

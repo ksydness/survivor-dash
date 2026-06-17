@@ -1,9 +1,17 @@
+export type SeasonStatus = 'active' | 'final' | 'drafting';
+
 export interface SeasonMeta {
   season: number;
   name: string;
-  status: 'active' | 'final';
+  status: SeasonStatus;
   num_weeks: number;
   last_synced_at: string | null;
+}
+
+export interface DraftData {
+  meta: { season: number; name: string; status: SeasonStatus };
+  teams: string[];   // the league's teams (draft order is randomized client-side)
+  cast: string[];    // contestant names available to draft
 }
 
 export interface Contestant {

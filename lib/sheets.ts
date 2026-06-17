@@ -127,26 +127,40 @@ export function parseScoring(rows: string[][]) {
 export interface RegistryRow {
   season: number;
   name: string;
-  status: 'active' | 'final';
+  status: 'active' | 'final' | 'drafting';
   num_weeks: number;
   urls: { episodes: string; contestants: string; leaderboard: string; scoring?: string };
+  teams: string[]; // optional Teams column (pipe-separated), used by the draft room
 }
 
 /**
  * The "Seasons" control tab — the app's index of which seasons exist.
- * Columns: Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks
+ * Columns: Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks | Teams
+ * - Status: "active" (normal dashboard), "final" (season over), or "drafting" (show the draft room).
+ * - Teams (optional): the league's teams pipe-separated, e.g. "Kenny + Lena|Tony + Karina|Megan + Jake|Will + Kathleen + Anna".
+ *   Used by the draft room; if blank it falls back to the distinct teams found in the Contestants tab.
  * Add a row to create a season; set Status to "final" to end it.
  */
 export function parseRegistry(rows: string[][]): RegistryRow[] {
   return rows.slice(1)
     .filter(r => (r[0] || '').trim() && /^\d+$/.test((r[0] || '').trim()))
-    .map(r => ({
-      season: num(r[0]),
-      name: (r[1] || '').trim() || `Season ${num(r[0])}`,
-      status: ((r[2] || '').trim().toLowerCase() === 'final' ? 'final' : 'active') as 'active' | 'final',
-      urls: { episodes: (r[3] || '').trim(), contestants: (r[4] || '').trim(), leaderboard: (r[5] || '').trim(), scoring: (r[6] || '').trim() || undefined },
-      num_weeks: r[7] ? num(r[7]) : 14,
-    }));
+    .map(r => {
+      const st = (r[2] || '').trim().toLowerCase();
+      const status = st === 'final' ? 'final' : st === 'drafting' ? 'drafting' : 'active';
+      return {
+        season: num(r[0]),
+        name: (r[1] || '').trim() || `Season ${num(r[0])}`,
+        status: status as 'active' | 'final' | 'drafting',
+        urls: { episodes: (r[3] || '').trim(), contestants: (r[4] || '').trim(), leaderboard: (r[5] || '').trim(), scoring: (r[6] || '').trim() || undefined },
+        num_weeks: r[7] ? num(r[7]) : 14,
+        teams: (r[8] || '').split('|').map(s => s.trim()).filter(Boolean),
+      };
+    });
+}
+
+/** Cast list for drafting: contestant names from the Contestants tab (col A), team ignored. */
+export function parseCast(rows: string[][]): string[] {
+  return rows.slice(1).map(r => (r[0] || '').trim()).filter(Boolean);
 }
 
 /**
