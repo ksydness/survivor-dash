@@ -289,7 +289,10 @@ export default function DraftRoom({ season }: { season: number }) {
                         const isCurrent = phase === 'drafting' && onClockTeam === ti && currentRound === r + 1;
                         return (
                           <td key={ti} className={isCurrent ? 'cell now' : 'cell'}
-                            style={{ borderColor: pk ? colorFor(teams[ti], ti) : undefined }}>
+                            style={{
+                              borderColor: pk ? colorFor(teams[ti], ti) : undefined,
+                              outlineColor: isCurrent ? colorFor(teams[ti], ti) : undefined,
+                            }}>
                             {pk ? pk.contestant : (isCurrent ? '⏳' : '')}
                           </td>
                         );
@@ -400,7 +403,7 @@ const CSS = `
 .board th{color:#cbd5e1;font-weight:700;font-size:12px;white-space:nowrap}
 .board .rnd{color:#78716c;font-weight:700;white-space:nowrap}
 .board .cell{border-left-width:3px}
-.board .cell.now{background:#2a2520;outline:2px solid #f59e0b;outline-offset:-2px}
+.board .cell.now{background:#2a2520;outline:2px solid;outline-offset:-2px}
 .rosters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .rcard{background:#262220;border:1px solid #2f2a27;border-radius:14px;padding:14px}
 .rcard h3{font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:8px}
