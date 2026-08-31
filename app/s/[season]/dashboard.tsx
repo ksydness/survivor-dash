@@ -9,6 +9,7 @@ const TEAM_COLORS: Record<string, string> = {
   'Tony + Karina': '#f59e0b',
   'Megan + Jake': '#2dd4bf',
   'Will + Kathleen + Anna': '#a78bfa',
+  'Will': '#a78bfa',  // S46 precursor of Will + Kathleen + Anna — same lineage, same color
 };
 const FALLBACK = ['#fb7185', '#f59e0b', '#2dd4bf', '#a78bfa', '#60a5fa', '#f472b6'];
 function colorFor(team: string, i = 0) { return TEAM_COLORS[team] ?? FALLBACK[i % FALLBACK.length]; }
