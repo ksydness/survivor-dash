@@ -14,7 +14,7 @@ const colorFor = (t: string, i = 0) => PRESET[t] ?? FALLBACK[i % FALLBACK.length
 const PICK_SECONDS = 45;
 
 interface Pick { overall: number; round: number; teamIndex: number; contestant: string; }
-interface Persisted { order: number[]; picks: Pick[]; phase: 'setup' | 'drafting' | 'done'; rounds: number; }
+interface Persisted { order: number[]; picks: Pick[]; phase: 'setup' | 'drafting' | 'done'; rounds: number; clockSecs?: number; }
 
 export default function DraftRoom({ season }: { season: number }) {
   const [data, setData] = useState<DraftData | null>(null);
@@ -23,8 +23,11 @@ export default function DraftRoom({ season }: { season: number }) {
   const [order, setOrder] = useState<number[]>([]);      // team indices, round-1 order
   const [picks, setPicks] = useState<Pick[]>([]);
   const [rounds, setRounds] = useState(0);               // picks per team (0 = use default)
+  const [clockSecs, setClockSecs] = useState(PICK_SECONDS);
   const [secondsLeft, setSecondsLeft] = useState(PICK_SECONDS);
   const [running, setRunning] = useState(false);
+  const [splash, setSplash] = useState<Pick | null>(null);
+  const splashTimer = useRef<number | null>(null);
   const [muted, setMuted] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
   const confettiRef = useRef<HTMLCanvasElement | null>(null);
@@ -53,6 +56,7 @@ export default function DraftRoom({ season }: { season: number }) {
         const s: Persisted = JSON.parse(raw);
         setOrder(s.order || []); setPicks(s.picks || []); setPhase(s.phase || 'setup');
         setRounds(s.rounds || defaultRounds);
+        if (s.clockSecs) setClockSecs(s.clockSecs);
         return;
       }
     } catch { /* ignore */ }
@@ -62,8 +66,8 @@ export default function DraftRoom({ season }: { season: number }) {
   // persist
   useEffect(() => {
     if (!loaded.current) return;
-    try { localStorage.setItem(lsKey, JSON.stringify({ order, picks, phase, rounds } as Persisted)); } catch { /* ignore */ }
-  }, [order, picks, phase, rounds, lsKey]);
+    try { localStorage.setItem(lsKey, JSON.stringify({ order, picks, phase, rounds, clockSecs } as Persisted)); } catch { /* ignore */ }
+  }, [order, picks, phase, rounds, clockSecs, lsKey]);
 
   const teams = data?.teams ?? [];
   const cast = data?.cast ?? [];
@@ -103,8 +107,8 @@ export default function DraftRoom({ season }: { season: number }) {
 
   // ── clock ──
   useEffect(() => { // reset clock whenever a new team is on the clock
-    if (phase === 'drafting' && onClockTeam >= 0) { setSecondsLeft(PICK_SECONDS); setRunning(true); }
-  }, [overall, phase, onClockTeam]);
+    if (phase === 'drafting' && onClockTeam >= 0) { setSecondsLeft(clockSecs); setRunning(true); }
+  }, [overall, phase, onClockTeam, clockSecs]);
 
   useEffect(() => {
     if (phase !== 'drafting' || !running || onClockTeam < 0) return;
@@ -127,19 +131,22 @@ export default function DraftRoom({ season }: { season: number }) {
     setOrder(idx);
     beep(523, 0.08); setTimeout(() => beep(784, 0.12), 80);
   }
-  function startDraft() { if (order.length) { setPhase('drafting'); setSecondsLeft(PICK_SECONDS); setRunning(true); } }
+  function startDraft() { if (order.length) { setPhase('drafting'); setSecondsLeft(clockSecs); setRunning(true); } }
   function draft(name: string) {
     if (phase !== 'drafting' || onClockTeam < 0) return;
     const p: Pick = { overall, round: currentRound, teamIndex: onClockTeam, contestant: name };
     const next = [...picks, p];
     setPicks(next);
+    setSplash(p);
+    if (splashTimer.current) clearTimeout(splashTimer.current);
+    splashTimer.current = window.setTimeout(() => setSplash(null), 2400);
     pickDing();
     if (next.length >= totalPicks) { setPhase('done'); setRunning(false); launchConfetti(); fanfare(); }
   }
-  function undo() { if (picks.length) { setPicks(picks.slice(0, -1)); if (phase === 'done') setPhase('drafting'); } }
+  function undo() { if (picks.length) { setPicks(picks.slice(0, -1)); setSplash(null); if (phase === 'done') setPhase('drafting'); } }
   function resetDraft() {
     if (!confirm('Reset the entire draft? This clears all picks and the order.')) return;
-    setPicks([]); setOrder([]); setPhase('setup'); setRunning(false);
+    setPicks([]); setOrder([]); setPhase('setup'); setRunning(false); setSplash(null);
     try { localStorage.removeItem(lsKey); } catch { /* ignore */ }
   }
 
@@ -191,8 +198,18 @@ export default function DraftRoom({ season }: { season: number }) {
   if (!teams.length || !cast.length) return <Shell><div className="msg err">Missing teams or cast. Add the cast to your Contestants tab and the teams to the Seasons tab’s Teams column.</div></Shell>;
 
   return (
-    <Shell title={`${data.meta.name} Draft`}>
+    <Shell title={`${data.meta.name} Draft`} sub={`Snake Draft · ${clockSecs}s clock`}>
       <canvas ref={confettiRef} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 100 }} />
+
+      {splash && (
+        <div className="splash" key={splash.overall}>
+          <div className="splashcard" style={{ borderColor: colorFor(teams[splash.teamIndex], splash.teamIndex) }}>
+            <div className="sp-label">Round {splash.round} · Pick {splash.overall + 1}</div>
+            <div className="sp-team" style={{ color: colorFor(teams[splash.teamIndex], splash.teamIndex) }}>{teams[splash.teamIndex]}</div>
+            <div className="sp-name">{splash.contestant}</div>
+          </div>
+        </div>
+      )}
 
       {/* control bar */}
       <div className="bar">
@@ -219,6 +236,12 @@ export default function DraftRoom({ season }: { season: number }) {
             <button className="step" onClick={() => setRounds(r => Math.max(1, (r || maxRounds) - 1))} disabled={picksPerTeam <= 1}>−</button>
             <b>{picksPerTeam}</b>
             <button className="step" onClick={() => setRounds(r => Math.min(maxRounds, (r || maxRounds) + 1))} disabled={picksPerTeam >= maxRounds}>+</button>
+          </div>
+          <div className="rounds">
+            <span className="dim">Pick clock:</span>
+            <button className="step" onClick={() => setClockSecs(c => Math.max(15, c - 15))} disabled={clockSecs <= 15}>−</button>
+            <b>{clockSecs}s</b>
+            <button className="step" onClick={() => setClockSecs(c => Math.min(180, c + 15))} disabled={clockSecs >= 180}>+</button>
           </div>
           <p className="dim small">
             {cast.length} contestants · {teams.length} teams · {picksPerTeam * teams.length} of {cast.length} drafted
@@ -343,14 +366,14 @@ function ExportBlock({ title, text }: { title: string; text: string }) {
   );
 }
 
-function Shell({ children, title }: { children: React.ReactNode; title?: string }) {
+function Shell({ children, title, sub }: { children: React.ReactNode; title?: string; sub?: string }) {
   return (
     <div id="app">
       <div className="topnav"><a href="/">‹ All seasons</a></div>
       <div className="header">
         <div className="torch">🔥</div>
         <h1>{title ?? 'Draft Room'}</h1>
-        <div className="sub">Snake Draft · 45s clock</div>
+        <div className="sub">{sub ?? 'Snake Draft'}</div>
       </div>
       {children}
       <style>{CSS}</style>
@@ -404,6 +427,12 @@ const CSS = `
 .board .rnd{color:#78716c;font-weight:700;white-space:nowrap}
 .board .cell{border-left-width:3px}
 .board .cell.now{background:#2a2520;outline:2px solid;outline-offset:-2px}
+.splash{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:90;pointer-events:none;background:rgba(12,10,9,.72);animation:spfade 2.4s ease forwards}
+.splashcard{background:#1c1917;border:3px solid #2f2a27;border-radius:20px;padding:28px 44px;text-align:center;max-width:90vw}
+.sp-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#a8a29e;font-weight:700}
+.sp-team{font-size:20px;font-weight:800;margin-top:8px}
+.sp-name{font-size:34px;font-weight:800;margin-top:4px;overflow-wrap:anywhere}
+@keyframes spfade{0%{opacity:0}8%{opacity:1}82%{opacity:1}100%{opacity:0}}
 .rosters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .rcard{background:#262220;border:1px solid #2f2a27;border-radius:14px;padding:14px}
 .rcard h3{font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:8px}
