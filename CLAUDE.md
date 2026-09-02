@@ -72,21 +72,33 @@ The app is driven by a **Seasons control tab** so all commissioner actions happe
 - **End a season**: set that row's `Status` to `final`. Live badge drops; the dashboard reads its
   final numbers straight from the sheet.
 
-### Draft room (`status = drafting`)
+### Draft room (`status = drafting`) — live, multi-device
 
-When a season's `Status` is `drafting`, `/s/<n>` renders a client-side snake-draft room
-(`app/s/[season]/DraftRoom.tsx`) instead of the dashboard — built for one shared screen at an
-in-person draft. No backend: all draft state lives in the browser and is saved to `localStorage`
-(key `survivor-draft-s<n>`) so a refresh resumes. Data comes from `/api/draft/[season]`
-(`getDraftData`): the **cast** = contestant names in the Contestants tab (col A, team ignored), and
-the **teams** = the Seasons-tab `Teams` column.
+When a season's `Status` is `drafting`, `/s/<n>` renders the live snake-draft room
+(`app/s/[season]/DraftRoom.tsx`) instead of the dashboard. Every team drafts from its own device;
+shared state lives in one Supabase row per (league, season) in the **bakeoff-drafts** project
+(shared with bakeoff-dash, `league = 'survivor'`), pushed to all devices via Supabase Realtime with
+a 3s polling fallback. Cast/teams come from `/api/draft/[season]` (`getDraftData`): **cast** =
+contestant names in the Contestants tab, **teams** = the Seasons-tab `Teams` column. The sheet is
+still the scoring source of truth — the finished draft is copy-pasted into the sheet as before.
 
-Flow: randomize draft order → 45-second visual countdown per pick (warning + buzzer at 0:00, never
-auto-picks) → click a contestant's Draft button to assign them and advance (snake order) → live
-draft board grid → confetti on the final pick → copy-paste exports for the **Contestants** tab
-(name + team) and the **Draft** tab. After drafting, paste the results in and flip `Status` to
-`active`. To run a draft: set `Status = drafting`, put the cast names in the Contestants tab, and
-fill the `Teams` column.
+Files: `lib/draftConfig.ts` (league + public Supabase URL/anon key, shipped in code),
+`lib/liveDraft.ts` (store with optimistic versioning), `app/api/live-draft/[season]/route.ts`
+(GET state; POST actions `create/configure/start/pick/undo/pause/resume/reset`, commissioner key
+required for all but `pick`, turn + availability validated server-side, stale version → 409).
+
+Flow: set `Status = drafting` → the commissioner opens `/s/<n>?key=<COMMISSIONER_KEY>` once (the
+key sticks in that browser; the draft row auto-creates) → everyone opens `/s/<n>` and taps their
+team in the lobby (or "Just watching"; the commissioner also picks a team and drafts like everyone
+else, plus admin controls) → commissioner rolls the order, sets picks-per-team and the pick clock
+(15–180s), Start → the on-clock team's device unlocks its Draft buttons; everyone gets the pick
+announcement splash + ding, the on-clock team also gets a "You're on the clock!" splash + chime
+(re-fires on snake double-picks), and non-on-clock teams see "Your next pick: N picks away". The
+clock is server-anchored (`deadline` timestamp, padded ~5s so announcements finish before it
+visibly starts) and buzz-only — it never auto-picks; the commissioner can pause/resume, undo, pick
+for a stalled team, or reset. Confetti + copy-paste exports (Contestants + Draft tabs) on
+completion. Device roles are kept in `localStorage` (`survivor-live-role-s<n>`,
+`survivor-commish-key`). Picks are honor-system (no per-team auth) — accepted for a friends league.
 - **New teams**: just the `team` column on the Contestants tab — no separate setup. Team colors are
   auto-assigned in `dashboard.tsx` (`TEAM_COLORS` has nice presets + a fallback palette; add a
   name there only if you want a specific color).
@@ -156,18 +168,19 @@ ports this exact logic (Input × Scoring) for future use if we ever build an in-
 |---|---|
 | `SEASONS_CSV_URL` | Published-CSV URL of the **Seasons** control tab (required) |
 | `HISTORY_CSV_URL` | Published-CSV URL of the **History** tab (optional; powers the all-time page) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key of the shared **bakeoff-drafts** Supabase project (live draft writes) |
+| `COMMISSIONER_KEY` | Secret string that unlocks commissioner controls via `/s/<n>?key=…` |
 
-> No database credentials in sheet-only mode. The parked Supabase path in `future-db/` would add
-> `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` when/if you migrate.
+> The Supabase URL and anon key are public by design and ship in `lib/draftConfig.ts`
+> (`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars override them if ever
+> needed). Only the two secrets above live in Vercel. The parked `future-db/` path is separate.
 
 ## Deployment workflow
 
-Claude can push code changes directly — no terminal needed:
-1. Edit files (clone fresh from GitHub or work in a temp dir).
-2. `git add -A && git commit -m "…" && git push` to the repo's `main`.
-3. Vercel auto-deploys within ~1 minute.
-
-GitHub token: classic PAT with `repo` scope — Kenny provides when needed (same as geosports).
+Claude pushes through the GitHub connector (the "Claude Github MCP Connector" app is installed on
+the account): `create_or_update_file` per file with the file's blob SHA (`git rev-parse
+<branch>:<path>`), then verify the Vercel auto-deploy went READY. `git push` / API writes from the
+sandbox are blocked by its proxy, and a pasted PAT does not help — don't ask for one.
 
 ## Key architecture decisions
 
