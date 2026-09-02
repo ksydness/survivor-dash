@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     description: 'Friends-league Fantasy Survivor dashboard & live draft hub',
   },
   twitter: { card: 'summary_large_image' },
+  robots: { index: false, follow: false }, // friends-league site — direct links only
 };
 
 // Colors the browser UI (mobile address bar, iOS status area) to match the app.
