@@ -272,6 +272,16 @@ export default function DraftRoom({ season }: { season: number }) {
     beep(523, 0.08); setTimeout(() => beep(784, 0.12), 80);
     act('configure', { settings: { order: idx } });
   }
+  function seedOrder() { // manual order: start from registry order, then use the arrows
+    act('configure', { settings: { order: teams.map((_, i) => i) } });
+  }
+  function moveOrder(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = [...order]; [next[i], next[j]] = [next[j], next[i]];
+    beep(587, 0.06);
+    act('configure', { settings: { order: next } });
+  }
   function resetDraft() {
     if (!confirm('Reset the entire draft for everyone? This clears all picks and the order.')) return;
     act('reset');
@@ -424,12 +434,19 @@ export default function DraftRoom({ season }: { season: number }) {
         <div className="panel center">
           <h2>Draft Order</h2>
           {!order.length
-            ? <p className="dim">{isCommish ? 'Randomize the order to begin. Snake format — last in round 1 picks first in round 2.' : 'Waiting for the commissioner to set the order and start the draft…'}</p>
+            ? <p className="dim">{isCommish ? 'Randomize the order, or set it by hand (e.g. from a challenge). Snake format — last in round 1 picks first in round 2.' : 'Waiting for the commissioner to set the order and start the draft…'}</p>
             : (
               <ol className="orderlist">
                 {order.map((ti, i) => (
                   <li key={ti}><span className="ord">{i + 1}</span>
-                    <span className="dot" style={{ background: colorFor(teams[ti], ti) }} />{teams[ti]}</li>
+                    <span className="dot" style={{ background: colorFor(teams[ti], ti) }} />{teams[ti]}
+                    {isCommish && (
+                      <span className="ordbtns">
+                        <button className="step sm" onClick={() => moveOrder(i, -1)} disabled={i === 0} aria-label="move up">▲</button>
+                        <button className="step sm" onClick={() => moveOrder(i, 1)} disabled={i === order.length - 1} aria-label="move down">▼</button>
+                      </span>
+                    )}
+                  </li>
                 ))}
               </ol>
             )}
@@ -455,7 +472,8 @@ export default function DraftRoom({ season }: { season: number }) {
           </p>
           {isCommish && (
             <div className="row">
-              <button className="btn" onClick={rollOrder}>🎲 {order.length ? 'Re-roll' : 'Generate'} order</button>
+              <button className="btn" onClick={rollOrder}>🎲 {order.length ? 'Re-roll' : 'Random'} order</button>
+              {!order.length && <button className="btn" onClick={seedOrder}>✍️ Set order manually</button>}
               {order.length > 0 && <button className="btn primary" onClick={() => act('start')}>Start draft →</button>}
             </div>
           )}
@@ -624,6 +642,9 @@ const CSS = `
 .orderlist{list-style:none;max-width:360px;margin:0 auto;display:grid;gap:8px}
 .orderlist li{display:flex;align-items:center;gap:10px;background:#262220;border:1px solid #2f2a27;border-radius:12px;padding:11px 14px;font-weight:700}
 .orderlist .ord{width:22px;color:#78716c}
+.orderlist .ordbtns{margin-left:auto;display:flex;gap:6px}
+.rounds .step.sm,.orderlist .step{width:30px;height:30px;border-radius:8px;background:#262220;border:1px solid #3a342f;color:#fafaf9;font-size:13px;font-weight:800;cursor:pointer}
+.orderlist .step:disabled{opacity:.3;cursor:default}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block;flex:none}.dot.lg{width:15px;height:15px;border-radius:4px}
 .clockpanel{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-width:2px}
 .oc-label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#a8a29e;font-weight:700}
