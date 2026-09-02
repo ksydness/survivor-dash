@@ -90,8 +90,9 @@ required for all but `pick`, turn + availability validated server-side, stale ve
 Flow: set `Status = drafting` → the commissioner opens `/s/<n>?key=<COMMISSIONER_KEY>` once (the
 key sticks in that browser; the draft row auto-creates) → everyone opens `/s/<n>` and taps their
 team in the lobby (or "Just watching"; the commissioner also picks a team and drafts like everyone
-else, plus admin controls) → commissioner rolls the order, sets picks-per-team and the pick clock
-(15–180s), Start → the on-clock team's device unlocks its Draft buttons; everyone gets the pick
+else, plus admin controls) → commissioner sets the order (🎲 Random/Re-roll, or ✍️ Set order
+manually → seeds the sheet order with ▲/▼ per row, for when challenge results decide it),
+picks-per-team and the pick clock (15–180s), Start → the on-clock team's device unlocks its Draft buttons; everyone gets the pick
 announcement splash + ding, the on-clock team also gets a "You're on the clock!" splash + chime
 (re-fires on snake double-picks), and non-on-clock teams see "Your next pick: N picks away". The
 clock is server-anchored (`deadline` timestamp, padded ~5s so announcements finish before it
@@ -162,6 +163,26 @@ Scoring lives entirely in the sheet's **Scoring** tab (the Apps Script reads it)
 ports this exact logic (Input × Scoring) for future use if we ever build an in-app tally UI
 ("Path B").
 
+## Link previews, icons & app polish
+
+No image files in the repo — everything renders at request time with `next/og` `ImageResponse`
+(Satori: every multi-child `div` needs `display:flex`; emoji render via Twemoji). Same files exist
+in bakeoff-dash with 🧁 branding — port changes to both.
+
+- `lib/og.tsx` — shared card renderer (`OG_BRAND`, `ogTeamColor`, `ogCard`).
+- `app/opengraph-image.tsx` (site card) + `app/s/[season]/opengraph-image.tsx` (per season:
+  "Draft in progress — tap to join" while drafting, else Leader/Champion + points).
+  `app/layout.tsx` sets `metadataBase` (hardcoded `https://survivor-dash.vercel.app`,
+  `NEXT_PUBLIC_SITE_URL` overrides), Open Graph + Twitter `summary_large_image`;
+  `app/s/[season]/page.tsx` has `generateMetadata` for per-season title/description.
+- Icons: `app/icon.tsx` (64), `app/apple-icon.tsx` (180), `app/icon-512/route.tsx` (512, for the
+  manifest) — 🔥 on `#0c0a09`. `viewport.themeColor = '#0c0a09'`.
+- `app/manifest.ts` → `/manifest.webmanifest` with `display: standalone` (Add to Home Screen opens
+  full-screen). `app/not-found.tsx` — branded 404.
+- Hidden from search engines on purpose (friends-league, direct links only): `robots: { index:
+  false, follow: false }` in layout metadata + `app/robots.ts` (`Disallow: /`). The site itself
+  stays public (no Vercel Deployment Protection).
+
 ## Environment variables (set in Vercel dashboard)
 
 | Variable | Description |
@@ -178,9 +199,13 @@ ports this exact logic (Input × Scoring) for future use if we ever build an in-
 ## Deployment workflow
 
 Claude pushes through the GitHub connector (the "Claude Github MCP Connector" app is installed on
-the account): `create_or_update_file` per file with the file's blob SHA (`git rev-parse
-<branch>:<path>`), then verify the Vercel auto-deploy went READY. `git push` / API writes from the
-sandbox are blocked by its proxy, and a pasted PAT does not help — don't ask for one.
+the account): `create_or_update_file` per file. The `sha` is the blob SHA of the file currently on
+the remote — take it from the previous push result or `get_file_contents` (sandbox clones are
+shallow and go stale, so `git rev-parse main:<path>` can be wrong); check the returned blob sha
+equals `git hash-object <local file>`. `push_files` 403s. Then verify the Vercel auto-deploy went
+READY (`list_deployments` on `prj_VxXVuN59tvb2To4BDTFlUPRsII3s`, team
+`team_ehXYoYTnX36nTlQX4GkRIbwA`). `git push` / API writes from the sandbox are blocked by its proxy,
+and a pasted PAT does not help — don't ask for one. Env var changes need a redeploy (any commit).
 
 ## Key architecture decisions
 
@@ -214,14 +239,8 @@ sandbox are blocked by its proxy, and a pasted PAT does not help — don't ask f
 
 ## Status / next steps
 
-This repo contains the sheet-only scaffold + a working visual prototype (`prototype/index.html`,
-real Season 50 data). Before first deploy:
-1. Create the GitHub repo + Vercel project (no database needed).
-2. Add a **Seasons** control tab and (optionally) a tidy **History** tab to the sheet; publish both
-   to web as CSV.
-3. Publish the Season 50 sheet's Episodes / Contestants / Leaderboard / Scoring tabs to web as CSV
-   and put those URLs in the Seasons tab row.
-4. Set `SEASONS_CSV_URL` (and `HISTORY_CSV_URL`) in Vercel.
-5. Validate `lib/sheets.ts` parsing against the real published CSVs (row offsets — the Apps Script
-   can shift the Leaderboard's Top Contestant / Top Team rows).
-6. Push to `main` → Vercel deploys. Visit `/s/50`.
+Live at https://survivor-dash.vercel.app with seasons 46–50 final and Season 51 registered as
+`drafting` (first season on the live draft room). `prototype/index.html` is the original design
+reference. Ideas not yet built: returning-player context in the draft room, a search/filter box for
+the 24-name pool, marking a contestant "out before the draft", an optional join code for picks, and
+the parked `future-db/` scoring migration.
