@@ -215,6 +215,11 @@ export default function DraftRoom({ season }: { season: number }) {
   const tick = () => beep(440, 0.05, 'square', 0.1);
   const buzzer = () => { beep(200, 0.5, 'sawtooth', 0.2); };
   const fanfare = () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.22, 'triangle', 0.2), i * 140)); };
+  // vibration for the on-the-clock alert (Android; iOS has no vibration API).
+  // Deliberately independent of the mute button — silent phones are the point.
+  const buzz = (pattern: number | number[]) => {
+    try { if ('vibrate' in navigator) navigator.vibrate(pattern); } catch { /* ignore */ }
+  };
 
   useEffect(() => { // countdown ticks + buzzer, from the shared clock
     if (phase !== 'drafting' || paused) { prevSecs.current = displaySecs; return; }
@@ -256,6 +261,7 @@ export default function DraftRoom({ season }: { season: number }) {
       const delay = overall > 0 ? 2600 : 400; // let the pick announcement finish first
       turnTimers.current.push(window.setTimeout(() => {
         setTurnSplash(true);
+        buzz([250, 100, 250, 100, 500]);
         beep(784, 0.12, 'triangle', 0.2); setTimeout(() => beep(1047, 0.2, 'triangle', 0.2), 120);
         turnTimers.current.push(window.setTimeout(() => setTurnSplash(false), 2200));
       }, delay));
