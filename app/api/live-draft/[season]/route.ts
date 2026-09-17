@@ -154,6 +154,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ season: st
       }
       case 'reset': {
         s.phase = 'setup'; s.picks = []; s.order = []; s.deadline = null; s.pausedRemaining = null;
+        // Re-seed cast + teams from the sheet, so roster edits made after the
+        // draft row was created (e.g. a new season's contestants pasted in)
+        // actually reach the room. Best-effort: if the sheet fetch fails,
+        // reset still succeeds with the existing roster.
+        try {
+          const dd = await getDraftData(season, true);
+          if (dd && dd.teams.length && dd.cast.length) {
+            s.teams = dd.teams;
+            s.cast = dd.cast;
+            const freshMax = Math.max(1, Math.floor(dd.cast.length / dd.teams.length));
+            s.rounds = Math.min(Math.max(1, s.rounds), freshMax);
+          }
+        } catch { /* keep the existing roster */ }
         break;
       }
       default:
