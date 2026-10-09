@@ -25,6 +25,41 @@ const teamWeekPts = (d: SeasonPayload, team: string, i: number) => r2(d.contesta
 /** "this week" deltas only make sense while a season is running */
 const liveWeek = (d: SeasonPayload) => (d.meta.status === 'active' ? latestWeek(d) : null);
 
+/**
+ * The season as it stood right after the k-th scored week (k = position in meta.scored_weeks).
+ * Later weeks are zeroed (arrays keep their length so week indexes stay valid), totals/ranks are
+ * recomputed with shared ranks on ties, highlights and the rank chart are cut off, and players
+ * who went out later count as still in. A rewound season is shown as "active" (so the week's
+ * points show and no crown appears) — it wasn't over yet at that point.
+ */
+function asOf(d: SeasonPayload, k: number): SeasonPayload {
+  const sw = d.meta.scored_weeks ?? [];
+  if (!sw.length || k >= sw.length - 1) return d;
+  const cut = sw[k];
+  const cutLabel = weekLabel(d, cut);
+  const contestants = d.contestants.map(c => {
+    const weeks = c.weeks.map((v, i) => (i <= cut ? v : 0));
+    const total = r2(weeks.reduce((a, b) => a + b, 0));
+    const eliminated = d.meta.tracks_eliminations
+      ? !!c.eliminated && (c.out_week == null || c.out_week <= cutLabel)
+      : total === 0;  // no Out column: same 0-points fallback the data layer uses
+    return { ...c, weeks, total, eliminated };
+  });
+  const tmap: Record<string, number> = {};
+  contestants.forEach(c => { tmap[c.team] = r2((tmap[c.team] ?? 0) + c.total); });
+  const vals = Object.values(tmap);
+  const teamTotals = Object.entries(tmap)
+    .map(([team, total]) => ({ team, total, rank: 1 + vals.filter(v => v > total).length }))
+    .sort((a, b) => b.total - a.total);
+  const ranks = Object.fromEntries(Object.entries(d.ranks).map(([t, r]) => [t, r.slice(0, k + 1)]));
+  return {
+    ...d,
+    meta: { ...d.meta, status: 'active', scored_weeks: sw.slice(0, k + 1) },
+    contestants, teamTotals, ranks,
+    highlights: d.highlights.slice(0, k + 1),
+  };
+}
+
 type Tab = 'leaderboard' | 'teams' | 'contestants' | 'stats' | 'history';
 const TABS: [Tab, string][] = [
   ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Contestants'],
@@ -36,6 +71,7 @@ export default function Dashboard({ season }: { season: number }) {
   const [tab, setTab] = useState<Tab>('leaderboard');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [view, setView] = useState<number | null>(null);  // position in scored_weeks; null = latest
 
   async function load(sync = false) {
     sync ? setRefreshing(true) : setLoading(true);
@@ -46,33 +82,60 @@ export default function Dashboard({ season }: { season: number }) {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [season]);
 
+  // ?week=N opens the dashboard rewound to that sheet week (shareable link)
+  useEffect(() => {
+    if (!data?.meta) return;
+    const w = parseInt(new URLSearchParams(window.location.search).get('week') || '', 10);
+    const sw = data.meta.scored_weeks ?? [];
+    const k = Number.isFinite(w) ? sw.findIndex(i => weekLabel(data, i) === w) : -1;
+    setView(k >= 0 && k < sw.length - 1 ? k : null);
+  }, [data]);
+
+  function goTo(k: number | null) {
+    setView(k);
+    const url = new URL(window.location.href);
+    const sw = data?.meta.scored_weeks ?? [];
+    if (k === null || k >= sw.length - 1) url.searchParams.delete('week');
+    else url.searchParams.set('week', String(weekLabel(data!, sw[k])));
+    window.history.replaceState(null, '', url.toString());
+  }
+
   if (loading) return <Shell><div style={{ textAlign: 'center', color: '#a8a29e', padding: 60 }}>Loading…</div></Shell>;
   if (!data?.meta) return <Shell><div style={{ textAlign: 'center', color: '#a8a29e', padding: 60 }}>Season not found.</div></Shell>;
+
+  const sw = data.meta.scored_weeks ?? [];
+  const last = sw.length - 1;
+  const k = view === null ? last : Math.min(view, last);
+  const v = view === null ? data : asOf(data, k);  // what every tab renders
+  const stepper = sw.length === 0 ? <div className="thru">No episodes scored yet</div> : (
+    <div className="weeknav">
+      <div className={`thru stepper ${k < last ? 'past' : ''}`}>
+        <button aria-label="Previous week" disabled={k <= 0} onClick={() => goTo(k - 1)}>‹</button>
+        <span>{k === last && data.meta.status === 'final' ? 'Final standings' : `Through Week ${weekLabel(data, sw[k])}`}</span>
+        <button aria-label="Next week" disabled={k >= last} onClick={() => goTo(k + 1 >= last ? null : k + 1)}>›</button>
+      </div>
+      {k < last && <button className="latest" onClick={() => goTo(null)}>Back to latest (Week {weekLabel(data, sw[last])}) »</button>}
+    </div>
+  );
 
   return (
     <Shell
       title={data.meta.name || `Season ${season}`}
-      through={throughText(data)}
+      through={stepper}
       onRefresh={() => load(true)} refreshing={refreshing}
       tab={tab} setTab={setTab}
     >
-      {tab === 'leaderboard' && <Leaderboard d={data} />}
-      {tab === 'teams' && <Teams d={data} />}
-      {tab === 'contestants' && <Contestants d={data} />}
-      {tab === 'stats' && <Stats d={data} />}
-      {tab === 'history' && <History d={data} />}
+      {tab === 'leaderboard' && <Leaderboard d={v} />}
+      {tab === 'teams' && <Teams d={v} />}
+      {tab === 'contestants' && <Contestants d={v} />}
+      {tab === 'stats' && <Stats d={v} />}
+      {tab === 'history' && <History d={v} />}
     </Shell>
   );
 }
 
-function throughText(d: SeasonPayload) {
-  if (d.meta.status === 'final') return 'Final standings';
-  const li = latestWeek(d);
-  return li === null ? 'No episodes scored yet' : `Through Week ${weekLabel(d, li)}`;
-}
-
 /* ── layout shell ── */
-function Shell(props: { children: React.ReactNode; title?: string; through?: string; onRefresh?: () => void; refreshing?: boolean; tab?: Tab; setTab?: (t: Tab) => void }) {
+function Shell(props: { children: React.ReactNode; title?: string; through?: React.ReactNode; onRefresh?: () => void; refreshing?: boolean; tab?: Tab; setTab?: (t: Tab) => void }) {
   return (
     <>
       <style>{CSS}</style>
@@ -82,7 +145,7 @@ function Shell(props: { children: React.ReactNode; title?: string; through?: str
           <div className="torch">🔥</div>
           <h1>{props.title ?? 'Fantasy Survivor'}</h1>
           <div className="sub">Friends League</div>
-          {props.through && <div className="thru">{props.through}</div>}
+          {props.through}
           {props.onRefresh && (
             <button className="refresh" onClick={props.onRefresh} disabled={props.refreshing}>
               {props.refreshing ? 'Syncing…' : '↻ Refresh'}
@@ -398,6 +461,15 @@ table.wide{min-width:480px}
 .header h1{font-size:28px;font-weight:800;letter-spacing:-.02em;margin-top:6px;background:linear-gradient(90deg,#f59e0b,#f97316);-webkit-background-clip:text;background-clip:text;color:transparent}
 .header .sub{color:#a8a29e;font-size:14px;margin-top:4px}
 .header .thru{display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:#d6d3d1;background:#1c1917;border:1px solid #2f2a27;border-radius:999px;padding:3px 11px}
+.weeknav{display:flex;flex-direction:column;align-items:center;gap:4px}
+.thru.stepper{display:inline-flex;align-items:center;gap:6px;padding:2px 4px;font-size:13px}
+.thru.stepper span{min-width:118px;text-align:center}
+.thru.stepper button{background:none;border:none;color:#fafaf9;font-size:20px;line-height:1;width:30px;height:28px;border-radius:999px;cursor:pointer}
+.thru.stepper button:hover:not(:disabled){background:#262220}
+.thru.stepper button:disabled{color:#44403c;cursor:default}
+.thru.stepper.past{border-color:#f59e0b;color:#fcd34d}
+.weeknav .latest{background:none;border:none;color:#a8a29e;font-size:12px;font-weight:600;cursor:pointer;padding:2px 6px}
+.weeknav .latest:hover{color:#fafaf9}
 .refresh{margin-top:12px;background:#1c1917;color:#fafaf9;border:1px solid #2f2a27;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer}
 .refresh:disabled{opacity:.6;cursor:default}
 .tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:8px 0 22px;position:sticky;top:0;background:linear-gradient(#0c0a09,#0c0a09 70%,transparent);padding:10px 0;z-index:20}
