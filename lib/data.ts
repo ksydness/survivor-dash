@@ -76,19 +76,21 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
   ]);
 
   const numWeeks = row.num_weeks;
-  const consRaw = parseContestants(coRows);
+  const { contestants: consRaw, tracksOut } = parseContestants(coRows);
   const scores = parseEpisodes(epRows, numWeeks);
   const { ranks, highlights } = lbRows ? parseLeaderboard(lbRows, numWeeks) : { ranks: {}, highlights: [] };
 
   // Build contestants with weekly arrays + totals
   const byName: Record<string, Contestant> = {};
-  for (const c of consRaw) byName[c.name] = { name: c.name, team: c.team, draft_round: c.draft_round, weeks: Array(numWeeks).fill(0), total: 0 };
+  for (const c of consRaw) byName[c.name] = { name: c.name, team: c.team, draft_round: c.draft_round, weeks: Array(numWeeks).fill(0), total: 0, eliminated: c.eliminated, out_week: c.out_week };
   for (const s of scores) {
     const c = byName[s.contestant];
     if (c && s.week >= 1 && s.week <= numWeeks) c.weeks[s.week - 1] = s.points;
   }
   const contestants = Object.values(byName);
   contestants.forEach(c => { c.total = c.weeks.reduce((a, b) => a + b, 0); });
+  // No Out column (older seasons): keep the old look — 0-point contestants render as eliminated.
+  if (!tracksOut) contestants.forEach(c => { c.eliminated = c.total === 0; });
 
   // Team totals computed from contestant points (authoritative)
   const tmap: Record<string, number> = {};
@@ -103,6 +105,6 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
     top_team_pts: h.top_team_pts ?? null,
   }));
 
-  const meta: SeasonMeta = { season: row.season, name: row.name, status: row.status, num_weeks: numWeeks, last_synced_at: new Date().toISOString() };
+  const meta: SeasonMeta = { season: row.season, name: row.name, status: row.status, num_weeks: numWeeks, last_synced_at: new Date().toISOString(), tracks_eliminations: tracksOut };
   return { meta, contestants, teamTotals, ranks, highlights: normHighlights, history };
 }
