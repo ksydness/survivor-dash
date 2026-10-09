@@ -13,6 +13,8 @@ const TEAM_COLORS: Record<string, string> = {
   'Megan + Jake': '#2dd4bf',
   'Will + Kathleen + Anna': '#a78bfa',
   'Will': '#a78bfa',
+  'Megan + Jake + Colt': '#2dd4bf',
+  'Will + Kathleen + Anna + Dan': '#a78bfa',
 };
 const FALLBACK = ['#fb7185', '#f59e0b', '#2dd4bf', '#a78bfa', '#60a5fa', '#f472b6'];
 export const ogTeamColor = (team: string, i = 0) => TEAM_COLORS[team] ?? FALLBACK[i % FALLBACK.length];

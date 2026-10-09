@@ -6,6 +6,8 @@ export interface SeasonMeta {
   status: SeasonStatus;
   num_weeks: number;
   last_synced_at: string | null;
+  /** true when the Contestants tab has a column headed "Out"/"Eliminated" — eliminations are marked explicitly */
+  tracks_eliminations?: boolean;
 }
 
 export interface DraftData {
@@ -20,6 +22,8 @@ export interface Contestant {
   draft_round?: number | null;
   weeks: number[]; // points per week, index 0 = Week 1
   total: number;
+  eliminated?: boolean;        // marked in the Contestants tab's Out column (or 0-pts fallback)
+  out_week?: number | null;    // the week typed in the Out column, if it's a number
 }
 
 export interface WeeklyHighlight {
