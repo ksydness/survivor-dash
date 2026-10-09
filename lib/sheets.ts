@@ -67,6 +67,29 @@ export function parseEpisodes(rows: string[][], numWeeks: number) {
   return out;
 }
 
+/**
+ * Episodes tab week metadata (doesn't change parseEpisodes):
+ * - scored[i]: week column i+1 holds at least one number (S48's Team column in col B never counts).
+ * - labels[i]: the week number shown in the sheet's header ("Week 3" → 3) so the site's week numbers
+ *   match the sheet and the Out column. Headers differ by season (S50 starts at Week 1, S51 and Bake
+ *   Off at Week 2, S49 repeats Week 2), so they're only used when they count up by one across every
+ *   scored week; otherwise fall back to the column position (1, 2, 3…).
+ */
+export function parseEpisodeWeeks(rows: string[][], numWeeks: number) {
+  const isNum = (v: string | undefined) => /^\s*-?\d+(\.\d+)?\s*$/.test(v ?? '');
+  const scored = Array.from({ length: numWeeks }, (_, i) => rows.slice(1).some(r => (r[0] || '').trim() && isNum(r[i + 1])));
+  const fromHdr = Array.from({ length: numWeeks }, (_, i) => {
+    const m = ((rows[0] || [])[i + 1] || '').match(/week\s*(\d+)/i);
+    return m ? parseInt(m[1], 10) : NaN;
+  });
+  const idx = scored.flatMap((s, i) => (s ? [i] : []));
+  const consistent = idx.length > 0 && idx.every((i, k) => Number.isFinite(fromHdr[i]) && (k === 0 || fromHdr[i] - fromHdr[idx[k - 1]] === i - idx[k - 1]));
+  const labels = consistent
+    ? Array.from({ length: numWeeks }, (_, i) => fromHdr[idx[0]] + (i - idx[0]))
+    : Array.from({ length: numWeeks }, (_, i) => i + 1);
+  return { scored, labels };
+}
+
 /** Does the first row look like a header rather than data? (tolerates header-less tabs) */
 function hasHeader(rows: string[][]): boolean {
   if (!rows.length) return false;

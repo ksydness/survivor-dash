@@ -18,11 +18,15 @@ export default async function Image({ params }: { params: Promise<{ season: stri
     }
     const p = await getSeasonPayload(n);
     const lead = p?.teamTotals[0];
+    const firsts = (p?.teamTotals ?? []).filter(t => t.rank === 1);
     const final = row.status === 'final';
+    const detail = !lead ? undefined
+      : firsts.length > 1 ? `${final ? 'Co-champions' : 'Tied for 1st'}: ${firsts.map(t => t.team).join(' & ')} · ${lead.total} pts`
+      : `${final ? 'Champion: ' : 'Leader: '}${lead.team} · ${lead.total} pts`;
     return ogCard({
       heading,
       sub: `${OG_BRAND.name} · ${final ? 'Final standings' : 'Live standings'}`,
-      detail: lead ? `${final ? 'Champion: ' : 'Leader: '}${lead.team} · ${lead.total} pts` : undefined,
+      detail,
       detailColor: lead ? ogTeamColor(lead.team, 0) : undefined,
     });
   } catch {
