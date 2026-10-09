@@ -74,12 +74,29 @@ function hasHeader(rows: string[][]): boolean {
   return /contestant|name|player/i.test(a) || /^team$/i.test(b);
 }
 
-/** Contestants tab: col A = name, col B = team, (col D = round drafted). Header optional. */
+/**
+ * Contestants tab: col A = name, col B = team, (col D = round drafted), plus an optional "Out" column.
+ * Header optional. The Out column is found by its header ("Out" / "Eliminated", any column) so it only
+ * applies to seasons that added one — older seasons and header-less tabs are untouched. Kenny types
+ * the week they went out (e.g. "3"); any other non-empty value ("x", "yes") also counts as
+ * eliminated, just without a week.
+ */
 export function parseContestants(rows: string[][]) {
-  const body = hasHeader(rows) ? rows.slice(1) : rows;
-  return body
-    .map(r => ({ name: (r[0] || '').trim(), team: (r[1] || '').trim(), draft_round: r[3] ? num(r[3]) : null }))
+  const header = hasHeader(rows);
+  const outCol = header ? rows[0].findIndex(h => /^\s*(out|elim)/i.test(h || '')) : -1;
+  const tracksOut = outCol >= 0;
+  const body = header ? rows.slice(1) : rows;
+  const contestants = body
+    .map(r => {
+      const outCell = tracksOut ? (r[outCol] || '').trim() : '';
+      const wk = outCell.match(/\d+/);
+      return {
+        name: (r[0] || '').trim(), team: (r[1] || '').trim(), draft_round: r[3] ? num(r[3]) : null,
+        eliminated: !!outCell, out_week: wk ? parseInt(wk[0], 10) : null,
+      };
+    })
     .filter(c => c.name && c.team);
+  return { contestants, tracksOut };
 }
 
 /**
