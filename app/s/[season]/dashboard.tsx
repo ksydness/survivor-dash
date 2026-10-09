@@ -159,13 +159,14 @@ function RankChart({ d }: { d: SeasonPayload }) {
 }
 
 function Teams({ d }: { d: SeasonPayload }) {
+  // bars are scaled to the top scorer league-wide (not per team) so they compare across teams
+  const mx = Math.max(...d.contestants.map(c => c.total), 1);
   return (
     <>
       {d.teamTotals.map((t, i) => {
         // still-in contestants first, eliminated sink to the bottom
         const roster = d.contestants.filter(c => c.team === t.team)
           .sort((a, b) => Number(!!a.eliminated) - Number(!!b.eliminated) || b.total - a.total);
-        const mx = Math.max(...roster.map(c => c.total), 1);
         const left = roster.filter(c => !c.eliminated).length;
         return (
           <div key={t.team} className="panel teamcard">
