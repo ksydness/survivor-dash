@@ -8,8 +8,8 @@
 // shape stay the same, so the API routes and dashboard need no changes.
 
 import {
-  fetchCsv, parseRegistry, parseHistory, parseEpisodes, parseContestants,
-  parseLeaderboard, parseCast, RegistryRow,
+  fetchCsv, parseRegistry, parseHistory, parseEpisodes, parseEpisodeWeeks, parseContestants,
+  parseCast, RegistryRow,
 } from './sheets';
 import type { SeasonPayload, Contestant, SeasonMeta, DraftData } from './types';
 
@@ -65,20 +65,21 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
     throw new Error(`Season ${season} needs at least Episodes and Contestants CSV URLs in the Seasons tab`);
   }
 
-  // Leaderboard is optional — older/simpler seasons may not have one. Without it
-  // there's no rank chart or weekly highlights, but standings (computed from
-  // contestant points), teams, contestants and stats still render.
-  const [epRows, coRows, lbRows, history] = await Promise.all([
+  // Standings, weekly ranks and weekly highlights are all derived from the Episodes tab
+  // (the same weekly points the standings use — no re-scoring), so ties show as ties and
+  // seasons without a Leaderboard tab get the rank chart + highlights too. The Leaderboard
+  // URL stays optional in the registry; it just isn't needed for the dashboard any more.
+  const [epRows, coRows, history] = await Promise.all([
     fetchCsv(row.urls.episodes, { fresh }),
     fetchCsv(row.urls.contestants, { fresh }),
-    row.urls.leaderboard ? fetchCsv(row.urls.leaderboard, { fresh }) : Promise.resolve(null),
     getHistory(fresh),
   ]);
 
   const numWeeks = row.num_weeks;
   const { contestants: consRaw, tracksOut } = parseContestants(coRows);
   const scores = parseEpisodes(epRows, numWeeks);
-  const { ranks, highlights } = lbRows ? parseLeaderboard(lbRows, numWeeks) : { ranks: {}, highlights: [] };
+  const { scored, labels } = parseEpisodeWeeks(epRows, numWeeks);
+  const scoredIdx = scored.flatMap((s, i) => (s ? [i] : []));
 
   // Build contestants with weekly arrays + totals
   const byName: Record<string, Contestant> = {};
@@ -95,16 +96,42 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
   // Team totals computed from contestant points (authoritative)
   const tmap: Record<string, number> = {};
   contestants.forEach(c => { tmap[c.team] = (tmap[c.team] ?? 0) + c.total; });
-  const teamTotals = Object.entries(tmap).map(([team, total]) => ({ team, total })).sort((a, b) => b.total - a.total);
+  // competition ranking: ties share a rank and the next rank is skipped (1, 1, 3, 4)
+  const rankOf = (v: number, all: number[]) => 1 + all.filter(x => x > v).length;
+  const round = (v: number) => Math.round(v * 100) / 100;  // keeps Bake Off half-points exact for tie checks
+  const teamTotals = Object.entries(tmap).map(([team, total]) => ({ team, total, rank: 0 })).sort((a, b) => b.total - a.total);
+  teamTotals.forEach(t => { t.rank = rankOf(t.total, teamTotals.map(x => x.total)); });
+  const teams = teamTotals.map(t => t.team);
 
-  const normHighlights = highlights.map(h => ({
-    week: h.week,
-    top_contestant: h.top_contestant ?? null,
-    top_contestant_pts: h.top_contestant_pts ?? null,
-    top_team: h.top_team ?? null,
-    top_team_pts: h.top_team_pts ?? null,
-  }));
+  // weekly team points (drafted contestants) → cumulative → rank per scored week
+  const teamWeek = (team: string, i: number) => contestants.filter(c => c.team === team).reduce((a, c) => a + c.weeks[i], 0);
+  const ranks: Record<string, number[]> = Object.fromEntries(teams.map(t => [t, [] as number[]]));
+  const cum: Record<string, number> = Object.fromEntries(teams.map(t => [t, 0]));
+  for (let i = 0; i < numWeeks; i++) {
+    teams.forEach(t => { cum[t] += teamWeek(t, i); });
+    if (!scored[i]) continue;
+    const vals = teams.map(t => round(cum[t]));
+    teams.forEach(t => ranks[t].push(rankOf(round(cum[t]), vals)));
+  }
 
-  const meta: SeasonMeta = { season: row.season, name: row.name, status: row.status, num_weeks: numWeeks, last_synced_at: new Date().toISOString(), tracks_eliminations: tracksOut };
+  // weekly highlights: every contestant tied for the week's high (all Episodes rows, drafted or not —
+  // same pool the sheet's script uses), every team tied for the high, and who went out that week
+  const normHighlights = scoredIdx.map(i => {
+    const wkScores = scores.filter(s => s.week === i + 1);
+    const hiC = wkScores.length ? Math.max(...wkScores.map(s => s.points)) : null;
+    const topC = hiC === null ? [] : [...new Set(wkScores.filter(s => s.points === hiC).map(s => s.contestant))];
+    const tw = teams.map(t => ({ t, v: round(teamWeek(t, i)) }));
+    const hiT = tw.length ? Math.max(...tw.map(x => x.v)) : null;
+    const topT = hiT === null ? [] : tw.filter(x => x.v === hiT).map(x => x.t);
+    const out = tracksOut ? contestants.filter(c => c.eliminated && c.out_week === labels[i]).map(c => c.name) : [];
+    return {
+      week: labels[i],
+      top_contestant: topC.length ? topC.join(', ') : null, top_contestant_pts: hiC,
+      top_team: topT.length ? topT.join(', ') : null, top_team_pts: hiT,
+      top_contestants: topC, top_teams: topT, out,
+    };
+  });
+
+  const meta: SeasonMeta = { season: row.season, name: row.name, status: row.status, num_weeks: numWeeks, last_synced_at: new Date().toISOString(), tracks_eliminations: tracksOut, week_labels: labels, scored_weeks: scoredIdx };
   return { meta, contestants, teamTotals, ranks, highlights: normHighlights, history };
 }
