@@ -23,12 +23,126 @@ const DEFAULT_WEEKS      = 14;
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Survivor Tools')
-    .addItem('Update Scores', 'updateSurvivorScores')
+    .addItem('Update Scores', 'updateScoresAndNotify')   // = updateSurvivorScores() + league notification
     .addItem('Retroactive Update', 'retroactiveUpdate')
+    .addItem('Send Score Notification', 'sendScoreNotificationNow')
     .addSeparator()
     .addItem('Start New Season', 'startNewSeason')
     .addItem('Finalize Season', 'finalizeSeason')
     .addToUi();
+}
+
+
+// =====================================================================
+// SCORE NOTIFICATIONS (Web Push to everyone who tapped 🔔 on the site)
+// =====================================================================
+// "Update Scores" in the menu now runs updateSurvivorScores() exactly as before, then
+// — only if it added a new week — schedules a notification. The site reads the
+// sheet's published CSV, which lags a few minutes, so a background trigger checks
+// once a minute until the site shows the new week, then sends (each week once).
+// First time: it asks for your commissioner key (the same one as /s/<n>?key=…)
+// and Google asks you to re-authorize the script (triggers + web requests).
+
+const SITE_URL = 'https://survivor-dash.vercel.app';
+const NOTIFY_MAX_TRIES = 15;   // ~15 minutes of retries, then give up quietly
+
+function updateScoresAndNotify() {
+  const before = latestScoredWeek_();
+  updateSurvivorScores();
+  const after = latestScoredWeek_();
+  if (after && after > (before || 0)) scheduleScoreNotification_(after);
+}
+
+/** Menu: send the latest week right now (resends even if it already went out). */
+function sendScoreNotificationNow() {
+  const ui = SpreadsheetApp.getUi();
+  if (!ensureNotifyKey_()) return;
+  const ok = ui.alert('Send score notification',
+    'Send the latest week the website shows to everyone who turned on notifications?\n\n' +
+    '(Sends even if that week already went out. If you just ran Update Scores, the site may take a few minutes to catch up — the automatic one handles that.)',
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  const r = postNotify_({ force: true });
+  if (r.status === 'sent') ui.alert('Sent Week ' + r.week + ' to ' + r.sent + ' device' + (r.sent === 1 ? '' : 's') + '.');
+  else if (r.httpCode === 401) { clearNotifyKey_(); ui.alert('The website rejected that commissioner key. Run this again to re-enter it.'); }
+  else ui.alert('Not sent: ' + (r.error || r.status || ('HTTP ' + r.httpCode)));
+}
+
+/** Highest "Week N" header in Episodes whose column has any number in it (same rule the site uses). */
+function latestScoredWeek_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Episodes');
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  let best = 0;
+  for (let c = 1; c < vals[0].length; c++) {
+    const m = String(vals[0][c]).match(/week\s*(\d+)/i);
+    if (!m) continue;
+    for (let r = 1; r < vals.length; r++) {
+      if (typeof vals[r][c] === 'number') { best = Math.max(best, parseInt(m[1], 10)); break; }
+    }
+  }
+  return best;
+}
+
+function scheduleScoreNotification_(week) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ensureNotifyKey_()) { ss.toast('No commissioner key — league not notified.', 'Notifications', 6); return; }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('NOTIFY_WEEK', String(week));
+  props.setProperty('NOTIFY_TRIES', '0');
+  scheduleNotifyRetry_();
+  ss.toast('The league gets a notification once the site shows Week ' + week + ' (usually 1–5 min).', 'Notifications', 8);
+}
+
+/** Trigger handler (must not end in _). Retries until the site has the new week. */
+function notifyLeagueRetry() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'notifyLeagueRetry')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  const props = PropertiesService.getScriptProperties();
+  const week = parseInt(props.getProperty('NOTIFY_WEEK') || '0', 10);
+  if (!week) return;
+  const tries = parseInt(props.getProperty('NOTIFY_TRIES') || '0', 10) + 1;
+  props.setProperty('NOTIFY_TRIES', String(tries));
+  let r;
+  try { r = postNotify_({ week: week }); } catch (e) { r = { status: 'error', error: String(e) }; }
+  console.log('notify week ' + week + ' try ' + tries + ': ' + JSON.stringify(r));
+  const retry = r.status === 'pending' || (r.status === 'error' && r.httpCode !== 401) || (!r.status && r.httpCode !== 401);
+  if (retry && tries < NOTIFY_MAX_TRIES) { scheduleNotifyRetry_(); return; }
+  if (r.httpCode === 401) clearNotifyKey_();
+  props.deleteProperty('NOTIFY_WEEK');
+  props.deleteProperty('NOTIFY_TRIES');
+}
+
+function scheduleNotifyRetry_() {
+  ScriptApp.newTrigger('notifyLeagueRetry').timeBased().after(60 * 1000).create();
+}
+
+function postNotify_(extra) {
+  const key = PropertiesService.getScriptProperties().getProperty('COMMISSIONER_KEY');
+  const resp = UrlFetchApp.fetch(SITE_URL + '/api/push/notify', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify(Object.assign({ key: key }, extra)),
+  });
+  let body = {};
+  try { body = JSON.parse(resp.getContentText()); } catch (e) { /* non-JSON (e.g. 5xx page) */ }
+  body.httpCode = resp.getResponseCode();
+  return body;
+}
+
+function ensureNotifyKey_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('COMMISSIONER_KEY')) return true;
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Score notifications — one-time setup',
+    'Paste your commissioner key (the same key you use in the site link ?key=…):', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK || !r.getResponseText().trim()) return false;
+  props.setProperty('COMMISSIONER_KEY', r.getResponseText().trim());
+  return true;
+}
+
+function clearNotifyKey_() {
+  PropertiesService.getScriptProperties().deleteProperty('COMMISSIONER_KEY');
 }
 
 
