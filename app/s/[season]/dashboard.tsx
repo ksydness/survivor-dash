@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SeasonPayload, Contestant } from '@/lib/types';
+import PushToggle from './PushToggle';
 
 // Stable team colors. Add new teams here if names change between seasons.
 const TEAM_COLORS: Record<string, string> = {
@@ -80,7 +81,14 @@ export default function Dashboard({ season }: { season: number }) {
       setData(await res.json());
     } finally { setLoading(false); setRefreshing(false); }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [season]);
+  useEffect(() => {
+    // ?sync=1 (score-notification taps) bypasses the 3-min cache so the new week shows; then drop it from the URL
+    const url = new URL(window.location.href);
+    const sync = url.searchParams.get('sync') === '1';
+    if (sync) { url.searchParams.delete('sync'); window.history.replaceState(null, '', url); }
+    load(sync);
+    /* eslint-disable-next-line */
+  }, [season]);
 
   // ?week=N opens the dashboard rewound to that sheet week (shareable link)
   useEffect(() => {
@@ -151,6 +159,7 @@ function Shell(props: { children: React.ReactNode; title?: string; through?: Rea
               {props.refreshing ? 'Syncing…' : '↻ Refresh'}
             </button>
           )}
+          {props.onRefresh && <PushToggle />}
         </div>
         {props.setTab && (
           <div className="tabs">
