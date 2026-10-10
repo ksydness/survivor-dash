@@ -169,6 +169,9 @@ function Shell(props: { children: React.ReactNode; title?: string; through?: Rea
 function Leaderboard({ d }: { d: SeasonPayload }) {
   const tt = d.teamTotals;
   const li = liveWeek(d);
+  // tap a team to see its roster; one open at a time (the Teams tab shows them all)
+  const [open, setOpen] = useState<string | null>(null);
+  const mx = Math.max(...d.contestants.map(c => c.total), 1);
   return (
     <>
       <div className="panel">
@@ -178,14 +181,24 @@ function Leaderboard({ d }: { d: SeasonPayload }) {
             const r = t.rank ?? i + 1;
             const tied = tt.filter(x => (x.rank ?? -1) === r).length > 1;
             const wk = li === null ? null : teamWeekPts(d, t.team, li);
+            const isOpen = open === t.team;
             return (
-              <div key={t.team} className={`stand ${r === 1 ? 'win' : ''}`}>
-                <div className="bar" style={{ background: colorFor(t.team, i) }} />
-                <div className={`rk ${tied ? 'tie' : ''}`}>{tied ? `T-${r}` : r}</div>
-                <div className="nm">{t.team}{r === 1 && d.meta.status === 'final' ? ' 👑' : ''}
-                  {wk !== null && <small className={wk < 0 ? 'neg' : ''}>{fmtDelta(wk)} this week</small>}
-                </div>
-                <div className="pts">{t.total}<span> pts</span></div>
+              <div key={t.team} className={`standgrp ${isOpen ? 'open' : ''}`}>
+                <button type="button" className={`stand ${r === 1 ? 'win' : ''}`} aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : t.team)}>
+                  <div className="bar" style={{ background: colorFor(t.team, i) }} />
+                  <div className={`rk ${tied ? 'tie' : ''}`}>{tied ? `T-${r}` : r}</div>
+                  <div className="nm">{t.team}{r === 1 && d.meta.status === 'final' ? ' 👑' : ''}
+                    {wk !== null && <small className={wk < 0 ? 'neg' : ''}>{fmtDelta(wk)} this week</small>}
+                  </div>
+                  <div className="pts">{t.total}<span> pts</span></div>
+                  <div className="chev" aria-hidden>▾</div>
+                </button>
+                {isOpen && (
+                  <div className="standroster">
+                    <Roster d={d} team={t.team} color={colorFor(t.team, i)} mx={mx} li={li} />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -286,6 +299,29 @@ function RankChart({ d }: { d: SeasonPayload }) {
   );
 }
 
+/** still-in contestants first (by points), eliminated sink to the bottom */
+const rosterOf = (d: SeasonPayload, team: string) => d.contestants.filter(c => c.team === team)
+  .sort((a, b) => Number(!!a.eliminated) - Number(!!b.eliminated) || b.total - a.total);
+
+/** One team's players with point bars — used by the Teams tab and the expanded Leaderboard row. */
+function Roster({ d, team, color, mx, li }: { d: SeasonPayload; team: string; color: string; mx: number; li: number | null }) {
+  return (
+    <div className="roster">
+      {rosterOf(d, team).map(c => {
+        const elim = !!c.eliminated;
+        return (
+          <div key={c.name} className={`player ${elim ? 'out' : ''}`}>
+            <div className={`pn ${elim ? 'elim' : ''}`}>{c.name}{elim && d.meta.tracks_eliminations && <small>{c.out_week ? `Out · Wk ${c.out_week}` : 'Out'}</small>}</div>
+            <div className="track"><div className="fill" style={{ width: `${Math.max(2, c.total / mx * 100)}%`, background: color, opacity: elim ? 0.25 : 0.85 }} /></div>
+            {li !== null && <div className={`wk ${(c.weeks[li] ?? 0) < 0 ? 'neg' : ''}`}>{elim && !c.weeks[li] ? '' : fmtDelta(c.weeks[li] ?? 0)}</div>}
+            <div className="pp">{c.total}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Teams({ d }: { d: SeasonPayload }) {
   // bars are scaled to the top scorer league-wide (not per team) so they compare across teams
   const mx = Math.max(...d.contestants.map(c => c.total), 1);
@@ -293,9 +329,7 @@ function Teams({ d }: { d: SeasonPayload }) {
   return (
     <>
       {d.teamTotals.map((t, i) => {
-        // still-in contestants first, eliminated sink to the bottom
-        const roster = d.contestants.filter(c => c.team === t.team)
-          .sort((a, b) => Number(!!a.eliminated) - Number(!!b.eliminated) || b.total - a.total);
+        const roster = rosterOf(d, t.team);
         const left = roster.filter(c => !c.eliminated).length;
         const wk = li === null ? null : teamWeekPts(d, t.team, li);
         const sub = [
@@ -306,19 +340,7 @@ function Teams({ d }: { d: SeasonPayload }) {
           <div key={t.team} className="panel teamcard">
             <h3><span className="sq" style={{ background: colorFor(t.team, i) }} />{t.team}<span className="tot">{t.total}</span></h3>
             {sub && <div className="left">{sub}</div>}
-            <div className="roster">
-              {roster.map(c => {
-                const elim = !!c.eliminated;
-                return (
-                  <div key={c.name} className={`player ${elim ? 'out' : ''}`}>
-                    <div className={`pn ${elim ? 'elim' : ''}`}>{c.name}{elim && d.meta.tracks_eliminations && <small>{c.out_week ? `Out · Wk ${c.out_week}` : 'Out'}</small>}</div>
-                    <div className="track"><div className="fill" style={{ width: `${Math.max(2, c.total / mx * 100)}%`, background: colorFor(t.team, i), opacity: elim ? 0.25 : 0.85 }} /></div>
-                    {li !== null && <div className={`wk ${(c.weeks[li] ?? 0) < 0 ? 'neg' : ''}`}>{elim && !c.weeks[li] ? '' : fmtDelta(c.weeks[li] ?? 0)}</div>}
-                    <div className="pp">{c.total}</div>
-                  </div>
-                );
-              })}
-            </div>
+            <Roster d={d} team={t.team} color={colorFor(t.team, i)} mx={mx} li={li} />
           </div>
         );
       })}
@@ -480,6 +502,7 @@ table.wide{min-width:480px}
 .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#a8a29e;margin-bottom:14px;font-weight:700}
 .grid{display:grid;gap:12px}
 .stand{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:#262220;border:1px solid #2f2a27;position:relative;overflow:hidden}
+button.stand{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .stand .bar{position:absolute;left:0;top:0;bottom:0;width:6px}
 .stand .rk{font-size:20px;font-weight:800;width:34px;text-align:center;color:#78716c}
 .stand.win .rk{color:#fcd34d}
@@ -489,6 +512,10 @@ table.wide{min-width:480px}
 .stand .rk.tie{font-size:15px}
 .stand .pts{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
 .stand .pts span{font-size:12px;color:#a8a29e;font-weight:600}
+.stand .chev{color:#78716c;font-size:13px;margin-left:-6px;transition:transform .15s}
+.standgrp.open .stand{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.standgrp.open .stand .chev{transform:rotate(180deg)}
+.standroster{background:#1f1b19;border:1px solid #2f2a27;border-top:none;border-radius:0 0 14px 14px;padding:2px 16px 14px 22px}
 .chartwrap{overflow-x:auto}svg{display:block}
 .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
 .legend .item{display:flex;align-items:center;gap:7px;font-size:13px;color:#a8a29e}
