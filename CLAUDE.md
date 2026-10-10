@@ -183,6 +183,33 @@ in bakeoff-dash with 🧁 branding — port changes to both.
   false, follow: false }` in layout metadata + `app/robots.ts` (`Disallow: /`). The site itself
   stays public (no Vercel Deployment Protection).
 
+## Score notifications (Web Push, 2026-10-10)
+
+Friends tap **🔔 Notify me** in the dashboard header to get a push when each week's scores are
+posted. Android works in the browser; iPhone only after Add to Home Screen (iOS 16.4+) — a Safari
+tab gets install instructions instead. The button hides itself until `VAPID_PRIVATE_KEY` is set.
+
+- **Trigger (sheet side)**: the Apps Script's *Update Scores* menu item now calls
+  `updateScoresAndNotify()` — runs the original scoring function untouched, and only if it added a
+  new week schedules a one-minute time trigger (`notifyLeagueRetry`) that POSTs
+  `/api/push/notify { key, week }`. Published CSV lags the sheet by a few minutes, so the route
+  answers `pending` until the site sees that week; the trigger retries each minute (max 15).
+  *Send Score Notification* (menu) resends the latest week manually (`force`). The commissioner
+  key is asked once and kept in Script Properties. Retroactive Update never notifies.
+- **Route** `app/api/push/notify`: key = `COMMISSIONER_KEY`; season defaults to the newest
+  `active` registry row; week read via `getSeasonPayload` (lib/data.ts, no re-scoring). The message
+  is deliberately short ("🔥 S51 · Week 3 scores are in" / "Tap to see the leaderboard."); tapping
+  opens `/s/<n>?sync=1`, which the dashboard treats as a Refresh (bypasses the 3-min cache) and
+  then strips from the URL. Each `(league, season, week)` is sent once (`push_sends` table).
+  `GET /api/push/notify?season=N` previews the message without sending.
+- **Storage**: tables `push_subscriptions` (endpoint, league, keys) and `push_sends` in the shared
+  **bakeoff-drafts** Supabase project, RLS on with no policies (service role only). Dead
+  subscriptions (404/410) are pruned on send.
+- Files: `lib/pushConfig.ts` (public VAPID key + title/accent — the only per-league differences),
+  `lib/push.ts`, `app/api/push/{subscribe,notify}/route.ts`, `app/s/[season]/PushToggle.tsx`,
+  `public/sw.js` (push + click only, no offline cache). Identical in both repos apart from
+  `pushConfig.ts`; both use the same VAPID key pair.
+
 ## Environment variables (set in Vercel dashboard)
 
 | Variable | Description |
@@ -190,11 +217,12 @@ in bakeoff-dash with 🧁 branding — port changes to both.
 | `SEASONS_CSV_URL` | Published-CSV URL of the **Seasons** control tab (required) |
 | `HISTORY_CSV_URL` | Published-CSV URL of the **History** tab (optional; powers the all-time page) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key of the shared **bakeoff-drafts** Supabase project (live draft writes) |
-| `COMMISSIONER_KEY` | Secret string that unlocks commissioner controls via `/s/<n>?key=…` |
+| `COMMISSIONER_KEY` | Secret string that unlocks commissioner controls via `/s/<n>?key=…` (also authorizes the sheet's score-notification calls) |
+| `VAPID_PRIVATE_KEY` | Web Push private key (public half is in `lib/pushConfig.ts`); 🔔 button hidden while unset |
 
 > The Supabase URL and anon key are public by design and ship in `lib/draftConfig.ts`
 > (`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` env vars override them if ever
-> needed). Only the two secrets above live in Vercel. The parked `future-db/` path is separate.
+> needed). Only the secrets above live in Vercel. The parked `future-db/` path is separate.
 
 ## Deployment workflow
 
