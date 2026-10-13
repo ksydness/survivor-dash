@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { SeasonPayload, Contestant } from '@/lib/types';
 import PushToggle from './PushToggle';
 
@@ -61,10 +61,10 @@ function asOf(d: SeasonPayload, k: number): SeasonPayload {
   };
 }
 
-type Tab = 'leaderboard' | 'teams' | 'contestants' | 'stats' | 'history';
+type Tab = 'leaderboard' | 'teams' | 'contestants' | 'draft' | 'stats' | 'history';
 const TABS: [Tab, string][] = [
   ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Contestants'],
-  ['stats', 'Stats'], ['history', 'History'],
+  ['draft', 'Draft'], ['stats', 'Stats'], ['history', 'History'],
 ];
 
 export default function Dashboard({ season }: { season: number }) {
@@ -131,11 +131,12 @@ export default function Dashboard({ season }: { season: number }) {
       title={data.meta.name || `Season ${season}`}
       through={stepper}
       onRefresh={() => load(true)} refreshing={refreshing}
-      tab={tab} setTab={setTab}
+      tab={tab} setTab={setTab} tabs={TABS.filter(([id]) => id !== 'draft' || !!data.draft)}
     >
       {tab === 'leaderboard' && <Leaderboard d={v} />}
       {tab === 'teams' && <Teams d={v} />}
       {tab === 'contestants' && <Contestants d={v} />}
+      {tab === 'draft' && data.draft && <Draft d={v} />}
       {tab === 'stats' && <Stats d={v} />}
       {tab === 'history' && <History d={v} />}
     </Shell>
@@ -143,12 +144,12 @@ export default function Dashboard({ season }: { season: number }) {
 }
 
 /* ── layout shell ── */
-function Shell(props: { children: React.ReactNode; title?: string; through?: React.ReactNode; onRefresh?: () => void; refreshing?: boolean; tab?: Tab; setTab?: (t: Tab) => void }) {
+function Shell(props: { children: React.ReactNode; title?: string; through?: React.ReactNode; onRefresh?: () => void; refreshing?: boolean; tab?: Tab; setTab?: (t: Tab) => void; tabs?: [Tab, string][] }) {
   return (
     <>
       <style>{CSS}</style>
       <div id="app">
-        <div className="topnav"><a href="/">‹ All seasons</a></div>
+        <div className="topnav"><a href="/">‹ All seasons</a><a href="/scoring">Scoring rules ›</a></div>
         <div className="header">
           <div className="torch">🔥</div>
           <h1>{props.title ?? 'Fantasy Survivor'}</h1>
@@ -163,7 +164,7 @@ function Shell(props: { children: React.ReactNode; title?: string; through?: Rea
         </div>
         {props.setTab && (
           <div className="tabs">
-            {TABS.map(([id, label]) => (
+            {(props.tabs ?? TABS).map(([id, label]) => (
               <div key={id} className={`tab ${props.tab === id ? 'active' : ''}`} onClick={() => props.setTab!(id)}>{label}</div>
             ))}
           </div>
@@ -402,6 +403,48 @@ function Contestants({ d }: { d: SeasonPayload }) {
   );
 }
 
+/**
+ * The Draft tab as a board: a column per team in first-round order, a row per round, each cell
+ * numbered by overall pick (snake: odd rounds left→right, even rounds right→left). Points and
+ * Out status follow the week stepper, like every other tab.
+ */
+function Draft({ d }: { d: SeasonPayload }) {
+  const b = d.draft!;
+  const n = b.teams.length;
+  const byName = new Map(d.contestants.map(c => [c.name.toLowerCase(), c]));
+  const pickNo = (r: number, i: number) => r * n + (r % 2 === 0 ? i + 1 : n - i);
+  return (
+    <div className="panel draftp">
+      <h2>Draft Board</h2>
+      <div className="dboard" style={{ gridTemplateColumns: `24px repeat(${n}, minmax(0, 1fr))` }}>
+        <div />
+        {b.teams.map((t, i) => (
+          <div key={t} className="dhead" style={{ borderColor: colorFor(t, i) }}>{t}</div>
+        ))}
+        {b.rounds.map((row, r) => (
+          <Fragment key={r}>
+            <div className="dround">R{r + 1}<span>{r % 2 === 0 ? '→' : '←'}</span></div>
+            {row.map((name, i) => {
+              const c = name ? byName.get(name.toLowerCase()) : undefined;
+              const color = colorFor(b.teams[i], i);
+              return (
+                <div key={i} className={`dcell ${c?.eliminated ? 'out' : ''} ${name ? '' : 'empty'}`}
+                  style={{ borderLeftColor: color, background: name ? `${color}1f` : undefined }}>
+                  <div className="dno">#{pickNo(r, i)}</div>
+                  <div className="dnm">{name ?? '—'}</div>
+                  {c && <div className="dpts">{c.total} pts{c.eliminated ? ' · out' : ''}</div>}
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+      {b.undrafted && b.undrafted.length > 0 && <div className="note">Undrafted: {b.undrafted.join(', ')}</div>}
+      <div className="note">Snake draft — the arrow shows which way each round went.</div>
+    </div>
+  );
+}
+
 function Stats({ d }: { d: SeasonPayload }) {
   const top = [...d.contestants].sort((a, b) => b.total - a.total);
   let bestWk = { p: '', v: -Infinity, wk: 0 };
@@ -481,7 +524,7 @@ function History({ d }: { d: SeasonPayload }) {
 /* ── styles (shared with prototype/index.html) ── */
 const CSS = `
 #app{max-width:1080px;margin:0 auto;padding:0 16px 64px}
-.topnav{padding:14px 0 0}
+.topnav{padding:14px 0 0;display:flex;justify-content:space-between}
 .topnav a{color:#a8a29e;font-size:13px;font-weight:600;text-decoration:none}
 .topnav a:hover{color:#f59e0b}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -568,5 +611,16 @@ tr:last-child td{border-bottom:none}
 .stat .d{font-size:12px;color:#78716c;margin-top:4px}
 .spark{display:flex;align-items:flex-end;gap:2px;height:26px}
 .spark i{flex:1;border-radius:1px;min-height:2px}
-@media(max-width:560px){.player .pn{width:74px}.header h1{font-size:23px}}
+.dboard{display:grid;gap:6px;align-items:stretch}
+.dhead{font-size:12px;font-weight:700;color:#fafaf9;line-height:1.25;padding:0 2px 7px;border-bottom:3px solid;display:flex;align-items:flex-end;word-break:break-word}
+.dround{font-size:11px;font-weight:700;color:#78716c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dround span{font-size:12px;color:#57534e}
+.dcell{border-left:3px solid;border-radius:8px;padding:7px 8px;min-width:0}
+.dcell .dno{font-size:10.5px;color:#a8a29e;font-weight:600;font-variant-numeric:tabular-nums}
+.dcell .dnm{font-size:14px;font-weight:700;color:#fafaf9;margin-top:1px;overflow-wrap:anywhere;line-height:1.2}
+.dcell .dpts{font-size:11.5px;color:#a8a29e;margin-top:2px;font-variant-numeric:tabular-nums}
+.dcell.out .dnm{color:#78716c}
+.dcell.out{opacity:.7}
+.dcell.empty .dnm{color:#57534e}
+@media(max-width:560px){.panel.draftp{padding:16px 10px}.dboard{gap:5px}.dcell{padding:6px 5px}.dcell .dnm{font-size:12.5px;overflow-wrap:normal;word-break:normal;hyphens:manual}.dcell .dpts{font-size:11px}.dhead{font-size:11px}.player .pn{width:74px}.header h1{font-size:23px}}
 `;
