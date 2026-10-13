@@ -9,9 +9,9 @@
 
 import {
   fetchCsv, parseRegistry, parseHistory, parseEpisodes, parseEpisodeWeeks, parseContestants,
-  parseCast, RegistryRow,
+  parseCast, parseDraft, parseScoring, findPublishedTab, RegistryRow,
 } from './sheets';
-import type { SeasonPayload, Contestant, SeasonMeta, DraftData } from './types';
+import type { SeasonPayload, Contestant, SeasonMeta, DraftData, DraftBoard, ScoringRule } from './types';
 
 const SEASONS_CSV_URL = () => requireEnv('SEASONS_CSV_URL');
 const HISTORY_CSV_URL = () => process.env.HISTORY_CSV_URL; // optional
@@ -56,6 +56,37 @@ async function getHistory(fresh = false) {
   catch { return []; }
 }
 
+/**
+ * A season's Draft tab as a board, or null. Uses the registry's optional Draft URL column, else finds
+ * the tab named "Draft" in the season's published workbook. Never throws — a missing or unpublished
+ * Draft tab just hides the dashboard's Draft tab.
+ */
+async function getDraftBoard(row: RegistryRow, fresh = false): Promise<DraftBoard | null> {
+  try {
+    const url = row.urls.draft || await findPublishedTab(row.urls.episodes, 'Draft', { fresh });
+    if (!url) return null;
+    const b = parseDraft(await fetchCsv(url, { fresh }));
+    return b.teams.length && b.rounds.length ? b : null;
+  } catch { return null; }
+}
+
+/**
+ * Scoring rules for the site-wide rules page: the Scoring tab of the newest season that has one
+ * (registry Scoring URL, else a tab named "Scoring" in that season's published workbook).
+ */
+export async function getScoringRules(fresh = false): Promise<{ season: number; name: string; rules: ScoringRule[] } | null> {
+  const reg = await getSeasons(fresh);  // newest first
+  for (const row of reg) {
+    try {
+      const url = row.urls.scoring || (row.urls.episodes ? await findPublishedTab(row.urls.episodes, 'Scoring', { fresh }) : null);
+      if (!url) continue;
+      const rules = parseScoring(await fetchCsv(url, { fresh }));
+      if (rules.length) return { season: row.season, name: row.name, rules };
+    } catch { /* try the next season */ }
+  }
+  return null;
+}
+
 /** Assemble the full payload for one season by reading its sheet tabs. */
 export async function getSeasonPayload(season: number, fresh = false): Promise<SeasonPayload | null> {
   const reg = await getSeasons(fresh);
@@ -69,10 +100,11 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
   // (the same weekly points the standings use — no re-scoring), so ties show as ties and
   // seasons without a Leaderboard tab get the rank chart + highlights too. The Leaderboard
   // URL stays optional in the registry; it just isn't needed for the dashboard any more.
-  const [epRows, coRows, history] = await Promise.all([
+  const [epRows, coRows, history, draft] = await Promise.all([
     fetchCsv(row.urls.episodes, { fresh }),
     fetchCsv(row.urls.contestants, { fresh }),
     getHistory(fresh),
+    getDraftBoard(row, fresh),
   ]);
 
   const numWeeks = row.num_weeks;
@@ -133,5 +165,5 @@ export async function getSeasonPayload(season: number, fresh = false): Promise<S
   });
 
   const meta: SeasonMeta = { season: row.season, name: row.name, status: row.status, num_weeks: numWeeks, last_synced_at: new Date().toISOString(), tracks_eliminations: tracksOut, week_labels: labels, scored_weeks: scoredIdx };
-  return { meta, contestants, teamTotals, ranks, highlights: normHighlights, history };
+  return { meta, contestants, teamTotals, ranks, highlights: normHighlights, history, draft };
 }

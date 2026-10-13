@@ -41,6 +41,15 @@ export interface WeeklyHighlight {
   out?: string[];                     // contestants whose Out week is this week
 }
 
+/** The Draft tab as a board: teams in first-round order, one row per round (snake order implied). */
+export interface DraftBoard {
+  teams: string[];
+  rounds: (string | null)[][];   // rounds[r][i] = teams[i]'s pick in round r+1
+  undrafted?: string[];
+}
+
+export interface ScoringRule { action: string; points: number }
+
 export interface SeasonPayload {
   meta: SeasonMeta;
   contestants: Contestant[];
@@ -48,4 +57,5 @@ export interface SeasonPayload {
   ranks: Record<string, number[]>;      // team -> rank per scored week (ties share a rank)
   highlights: WeeklyHighlight[];
   history: { season: number; team: string; place: number; points: number }[];
+  draft?: DraftBoard | null;           // null/absent when the season's Draft tab isn't published
 }

@@ -172,36 +172,104 @@ export function parseScoring(rows: string[][]) {
     .filter(s => s.action);
 }
 
+/**
+ * Draft tab → the board. Header row = teams in first-round order; one row per round; snake order is
+ * implied (the overall pick number is computed in the UI). Tolerates both layouts in use:
+ * - a label column A ("" / "Round" header, rows "Round 1" or "1") — S50/S51 and Bake Off sheets
+ * - no label column (header starts with the first team) — the live draft room's export as pasted
+ * Non-round rows after the board are ignored, except an "Undrafted" row (Bake Off S1), whose
+ * comma-separated names are returned separately.
+ */
+export function parseDraft(rows: string[][]) {
+  const head = rows[0] || [];
+  const h0 = (head[0] || '').trim();
+  const labelCol = h0 === '' || /^(round|rd|pick)s?$/i.test(h0);
+  const start = labelCol ? 1 : 0;
+  let last = head.length - 1;
+  while (last >= start && !(head[last] || '').trim()) last--;
+  const teams = head.slice(start, last + 1).map(t => (t || '').trim());
+  const rounds: (string | null)[][] = [];
+  let undrafted: string[] = [];
+  for (const r of rows.slice(1)) {
+    const label = (r[0] || '').trim();
+    const cells = teams.map((_, i) => (r[start + i] || '').trim() || null);
+    if (labelCol && /^undrafted/i.test(label)) {
+      undrafted = r.slice(1).join(',').split(',').map(x => x.trim()).filter(Boolean);
+      continue;
+    }
+    if (labelCol ? !/^(round|rd)?\s*\d+$/i.test(label) : cells.every(c => !c)) continue;
+    if (cells.every(c => !c)) continue;
+    rounds.push(cells);
+  }
+  return { teams: teams.filter(Boolean).length === teams.length ? teams : [], rounds, undrafted };
+}
+
+/**
+ * Find a tab's published-CSV URL by its NAME, given any published-CSV URL from the same workbook.
+ * Reads the workbook's /pubhtml page, which lists every published tab with its gid — so a tab works
+ * without its own registry column as long as it's published (Entire Document, or that tab).
+ * Returns null if the workbook isn't a published sheet or the tab isn't published.
+ */
+export async function findPublishedTab(anyCsvUrl: string, tab: string, opts: { fresh?: boolean } = {}): Promise<string | null> {
+  const m = anyCsvUrl.match(/^(https:\/\/docs\.google\.com\/spreadsheets\/d\/e\/[^/]+)\/pub/);
+  if (!m) return null;
+  const res = await fetch(`${m[1]}/pubhtml`, opts.fresh ? { cache: 'no-store' } : { next: { revalidate: 600 } });
+  if (!res.ok) return null;
+  const html = await res.text();
+  const re = /name:\s*"((?:[^"\\]|\\.)*)",\s*pageUrl:\s*"[^"]*?gid(?:=|\\u003d)(\d+)/g;
+  for (let x; (x = re.exec(html)); ) {
+    if (x[1].trim().toLowerCase() === tab.toLowerCase()) return `${m[1]}/pub?gid=${x[2]}&single=true&output=csv`;
+  }
+  return null;
+}
+
 export interface RegistryRow {
   season: number;
   name: string;
   status: 'active' | 'final' | 'drafting';
   num_weeks: number;
-  urls: { episodes: string; contestants: string; leaderboard: string; scoring?: string };
+  urls: { episodes: string; contestants: string; leaderboard: string; scoring?: string; draft?: string };
   teams: string[]; // optional Teams column (pipe-separated), used by the draft room
 }
 
 /**
  * The "Seasons" control tab — the app's index of which seasons exist.
- * Columns: Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks | Teams
+ * Columns (found by header, any order): Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL |
+ * Scoring URL | Draft URL | Weeks | Teams
  * - Status: "active" (normal dashboard), "final" (season over), or "drafting" (show the draft room).
  * - Teams (optional): the league's teams pipe-separated, e.g. "Kenny + Lena|Tony + Karina|Megan + Jake|Will + Kathleen + Anna".
  *   Used by the draft room; if blank it falls back to the distinct teams found in the Contestants tab.
+ * - Draft URL (optional): only needed if a season's Draft tab can't be found by name in its
+ *   published workbook (see findPublishedTab).
  * Add a row to create a season; set Status to "final" to end it.
  */
 export function parseRegistry(rows: string[][]): RegistryRow[] {
+  // Columns are located by HEADER, so Kenny can add/reorder columns (e.g. a "Draft URL" column
+  // inserted before Weeks) without shifting anything; the classic fixed positions are the fallback.
+  const head = (rows[0] || []).map(h => (h || '').trim().toLowerCase());
+  const col = (re: RegExp, dflt: number) => { const i = head.findIndex(h => re.test(h)); return i >= 0 ? i : dflt; };
+  const C = {
+    season: col(/^season$/, 0), name: col(/^name$/, 1), status: col(/^status$/, 2),
+    episodes: col(/^episodes?\b/, 3), contestants: col(/^contestants?\b/, 4), leaderboard: col(/^leaderboard\b/, 5),
+    scoring: col(/^scoring\b/, 6), weeks: col(/^weeks?$/, 7), teams: col(/^teams?$/, 8), draft: col(/^draft\b/, -1),
+  };
+  const cell = (r: string[], i: number) => (i >= 0 ? (r[i] || '').trim() : '');
   return rows.slice(1)
-    .filter(r => (r[0] || '').trim() && /^\d+$/.test((r[0] || '').trim()))
+    .filter(r => /^\d+$/.test(cell(r, C.season)))
     .map(r => {
-      const st = (r[2] || '').trim().toLowerCase();
+      const st = cell(r, C.status).toLowerCase();
       const status = st === 'final' ? 'final' : st === 'drafting' ? 'drafting' : 'active';
+      const season = num(cell(r, C.season));
       return {
-        season: num(r[0]),
-        name: (r[1] || '').trim() || `Season ${num(r[0])}`,
+        season,
+        name: cell(r, C.name) || `Season ${season}`,
         status: status as 'active' | 'final' | 'drafting',
-        urls: { episodes: (r[3] || '').trim(), contestants: (r[4] || '').trim(), leaderboard: (r[5] || '').trim(), scoring: (r[6] || '').trim() || undefined },
-        num_weeks: r[7] ? num(r[7]) : 14,
-        teams: (r[8] || '').split('|').map(s => s.trim()).filter(Boolean),
+        urls: {
+          episodes: cell(r, C.episodes), contestants: cell(r, C.contestants), leaderboard: cell(r, C.leaderboard),
+          scoring: cell(r, C.scoring) || undefined, draft: cell(r, C.draft) || undefined,
+        },
+        num_weeks: cell(r, C.weeks) ? num(cell(r, C.weeks)) : 14,
+        teams: cell(r, C.teams).split('|').map(x => x.trim()).filter(Boolean),
       };
     });
 }
