@@ -16,10 +16,13 @@ export default function Draft({ d }: { d: SeasonPayload }) {
   const color = (i: number) => colorFor(b.teams[i], i);
   const scored = picks.filter(p => p.c);
   const maxPts = Math.max(...scored.map(p => p.c!.total), 1);
-  const yMax = Math.ceil((maxPts * 1.08) / 50) * 50 || 50;
-  const minPts = Math.min(0, ...scored.map(p => p.c!.total));
+  // scale the points axis to the actual scores (early season ≈ 10s, late season ≈ 200s)
+  const step = maxPts <= 20 ? 5 : maxPts <= 50 ? 10 : maxPts <= 150 ? 25 : 50;
+  const yMax = Math.max(step * 2, Math.ceil((maxPts * 1.08) / step) * step);
+  const lowest = Math.min(0, ...scored.map(p => p.c!.total));
+  const minPts = lowest < 0 ? Math.floor(lowest / step) * step : 0;
   const total = picks.length;
-  const ticks = [0, Math.round(yMax / 2), yMax];
+  const ticks = [0, ...[0.5, 1].map(f => Math.round((yMax * f) / step) * step)].filter((t, i, a) => a.indexOf(t) === i);
 
   const readout = (p: typeof sel) => p && p.name ? (
     <><b>{p.name}</b><span className="muted"> · Round {p.round}, pick #{p.pick} · {p.team}{p.c ? ' · ' : ''}</span>
@@ -71,7 +74,7 @@ export default function Draft({ d }: { d: SeasonPayload }) {
           <div className="scatter">
             <div className="yax" aria-hidden>{ticks.map(t => <span key={t} style={{ bottom: `${((t - minPts) / (yMax - minPts)) * 100}%` }}>{t}</span>)}</div>
             <div className="plot">
-              {ticks.slice(1).map(t => <span key={t} className="gl-h" style={{ bottom: `${((t - minPts) / (yMax - minPts)) * 100}%` }} />)}
+              {ticks.filter(t => t > minPts).map(t => <span key={t} className="gl-h" style={{ bottom: `${((t - minPts) / (yMax - minPts)) * 100}%` }} />)}
               {b.rounds.slice(1).map((_, r) => <span key={r} className="gl-v" style={{ left: `${(((r + 1) * n - 0.5) / Math.max(total - 1, 1)) * 100}%` }} />)}
               {scored.map(p => (
                 <button key={p.pick} type="button" className="pt" aria-pressed={selPick === p.pick} onClick={() => setSelPick(p.pick)}
