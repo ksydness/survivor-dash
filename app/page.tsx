@@ -35,6 +35,11 @@ export default async function Home() {
           </Link>
         ))}
       </div>
+
+      <Link href="/scoring" style={{ display: 'inline-block', marginTop: 28, color: '#a8a29e', fontSize: 14,
+        fontWeight: 600, textDecoration: 'none', border: '1px solid #2f2a27', borderRadius: 999, padding: '8px 18px' }}>
+        📜 How scoring works ›
+      </Link>
     </main>
   );
 }
