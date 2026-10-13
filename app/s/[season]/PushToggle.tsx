@@ -20,9 +20,14 @@ function keyBytes(b64: string): Uint8Array<ArrayBuffer> {
 const post = (method: 'POST' | 'DELETE', body: unknown) =>
   fetch('/api/push/subscribe', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-export default function PushToggle() {
+/**
+ * variant "pill" (default) = the original text pill; "icon" = a 44px bell icon button for the
+ * compact app bar, which hands its hint text to the parent via onHint so it can show it below the bar.
+ */
+export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pill' | 'icon'; onHint?: (hint: string | null) => void } = {}) {
   const [state, setState] = useState<State>('loading');
   const [hint, setHint] = useState<string | null>(null);
+  useEffect(() => { onHint?.(hint); /* eslint-disable-next-line */ }, [hint]);
 
   useEffect(() => {
     (async () => {
@@ -80,11 +85,21 @@ export default function PushToggle() {
     if (state === 'denied') return setHint(h => h ? null : 'Notifications are blocked for this site — allow them in your browser or phone settings, then reload.');
   };
   const label = state === 'on' ? '🔔 On' : state === 'busy' ? '🔔 …' : '🔔 Notify me';
+  const title = state === 'on' ? 'Turn off score notifications' : 'Get notified when scores are posted';
+
+  if (variant === 'icon') return (
+    <button type="button" className={`iconbtn ${state === 'on' ? 'on' : ''}`} onClick={onClick} disabled={state === 'busy'}
+      aria-label={title} aria-pressed={state === 'on'} title={title}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill={state === 'on' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" fill="none" />
+      </svg>
+    </button>
+  );
 
   return (
     <>
       <button className="refresh" style={{ marginLeft: 8, ...(state === 'on' ? { borderColor: PUSH_BRAND.accent, color: PUSH_BRAND.accent } : {}) }}
-        onClick={onClick} disabled={state === 'busy'} title={state === 'on' ? 'Turn off score notifications' : 'Get notified when scores are posted'}>
+        onClick={onClick} disabled={state === 'busy'} title={title}>
         {label}
       </button>
       {hint && <div style={{ margin: '10px auto 0', maxWidth: 300, fontSize: 12, color: '#a8a29e', lineHeight: 1.45 }}>{hint}</div>}
