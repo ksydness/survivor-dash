@@ -101,7 +101,7 @@ for a stalled team, or reset. Confetti + copy-paste exports (Contestants + Draft
 completion. Device roles are kept in `localStorage` (`survivor-live-role-s<n>`,
 `survivor-commish-key`). Picks are honor-system (no per-team auth) — accepted for a friends league.
 - **New teams**: just the `team` column on the Contestants tab — no separate setup. Team colors are
-  auto-assigned in `dashboard.tsx` (`TEAM_COLORS` has nice presets + a fallback palette; add a
+  auto-assigned in `dash/model.ts` (`TEAM_COLORS` has nice presets + a fallback palette; add a
   name there only if you want a specific color).
 - **Change scoring**: edit the **Scoring** tab and re-run *Update Scores* in the sheet. The app
   reads the computed results, so no app change is needed.
@@ -253,17 +253,42 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
   peer-dep conflict (same as geosports).
 - **No cron.** Reads are on-demand + cached, so `vercel.json` has no cron. (The parked DB path would
   reintroduce one.)
-- **Team colors** are presets + a fallback palette in `dashboard.tsx`; new team names render fine
+- **Team colors** are presets + a fallback palette in `dash/model.ts`; new team names render fine
   without a code change.
 
 ## Dashboard tabs
 
-`app/s/[season]/dashboard.tsx` (design reference: `prototype/index.html`):
-1. **Leaderboard** — final/standings cards + rank-through-the-season line chart + weekly highlights.
-2. **Teams** — each team's roster with per-contestant point bars and team totals.
-3. **Contestants** — sortable table of all contestants (team, best week, total, weekly trend spark).
-4. **Stats** — season records (champion, top contestant, biggest week, margin, negative weeks).
-5. **History** — all-time standings across seasons 46–50 + per-season final tables.
+`app/s/[season]/dashboard.tsx` is the shell (compact app bar, full-width week picker, one swipeable
+row of tabs, `?tab=` and `?week=` kept in the URL). Each tab lives in `app/s/[season]/dash/`.
+Design rule on every tab: **the answer people come for sits up top; deeper data is one tap away**
+(player cards, team breakdowns, "Dig deeper" sections that start closed). Design references: the
+"Survivor Dash — UX Mockups" canvas and the "Fantasy Survivor" design system (colors = its tokens,
+declared once as CSS variables in `dash/styles.ts`).
+
+- `dash/model.ts` — pure helpers + derived data (team colors `TEAM_COLORS`, `asOf` week rewind,
+  standings with rank movement / points back / players left, the auto-written week recap, draft
+  pick numbers + steals & busts, history aggregates). Nothing is re-scored.
+- `dash/styles.ts` — the dashboard stylesheet, scoped under `.dash` and rendered only by the
+  dashboard (the draft room shares the route).
+- `dash/bits.tsx` — icons, `Disclosure`, `Pips`, `WeekBars`, `PlayerCard`.
+1. **Leaderboard** (`dash/Leaderboard.tsx`) — week recap card, standings (▲/▼ movement, points
+   back, bar vs leader, players-left pips); tap a team → its players with season + this-week points
+   and a link to the Teams tab. Rank chart fits the screen. "Week by week" highlights in a disclosure.
+2. **Teams** (`dash/Teams.tsx`) — players left per team, Find a player, every roster as name chips
+   (out = dashed + crossed out); tap a name → player card; "Team breakdown" → where the points came
+   from + team points by week.
+3. **Contestants** (`dash/Contestants.tsx`) — compact list (sort Total / Best week / Name, team
+   filter), still in first, out folded away; tap a row → player card.
+4. **Draft** (`dash/Draft.tsx`, only when the Draft tab is published) — the whole board on one
+   screen (rounds down, teams across, snake arrows), then steals & busts (pick # vs points; steal /
+   bust = biggest gap between draft slot and points finish).
+5. **Stats** (`dash/Stats.tsx`) — 4 headline tiles; Dig deeper: every-week-every-player heatmap,
+   league points per week by team, more records.
+6. **History** (`dash/History.tsx`) — reigning champs + titles; Dig deeper: finish by season,
+   season-by-season results, points per season, all-time records.
+
+`PushToggle.tsx` takes `variant="icon"` (bell in the app bar; hint text bubbles up via `onHint`).
+The default pill variant is unchanged, so bakeoff-dash's copy still matches if it isn't updated.
 
 ## Status / next steps
 
