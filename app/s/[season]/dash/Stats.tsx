@@ -13,7 +13,8 @@ export default function Stats({ d }: { d: SeasonPayload }) {
   d.contestants.forEach(c => sw.forEach(i => { const v = c.weeks[i] ?? 0; if (v > bestWk.v) bestWk = { p: c.name, v, wk: weekLabel(d, i) }; }));
   const tt = d.teamTotals;
   const leader = tt[0];
-  const second = tt[1];
+  const coLeaders = leader ? tt.filter(t => t.total === leader.total) : [];  // more than one = tied for 1st
+  const second = leader ? tt.find(t => t.total < leader.total) : undefined;
   const alive = d.contestants.filter(c => !c.eliminated);
   const negs = d.contestants.flatMap(c => sw.map(i => ({ c: c.name, v: c.weeks[i] ?? 0, wk: weekLabel(d, i) }))).filter(x => x.v < 0).sort((a, b) => a.v - b.v);
   const allPts = r2(d.contestants.reduce((a, c) => a + c.total, 0));
@@ -25,9 +26,13 @@ export default function Stats({ d }: { d: SeasonPayload }) {
     <>
       <section className="tiles">
         <div className="tile">
-          <div className="k">{final ? 'Champion' : 'Leader'}</div>
-          <div className="v sm" style={{ color: leader ? colorFor(leader.team, 0) : undefined }}>{leader?.team ?? '—'}</div>
-          <div className="d">{leader ? `${leader.total} pts${second ? ` · ${r2(leader.total - second.total)} ahead` : ''}` : ''}</div>
+          <div className="k">{coLeaders.length > 1 ? (final ? 'Co-champions' : 'Tied for 1st') : final ? 'Champion' : 'Leader'}</div>
+          {coLeaders.length > 1
+            ? <div className="v sm">{coLeaders.map((t, i) => <span key={t.team} style={{ display: 'block', color: colorFor(t.team, i) }}>{t.team}</span>)}</div>
+            : <div className="v sm" style={{ color: leader ? colorFor(leader.team, 0) : undefined }}>{leader?.team ?? '—'}</div>}
+          <div className="d">{!leader ? '' : coLeaders.length > 1
+            ? `${leader.total} pts each${second ? ` · ${r2(leader.total - second.total)} ahead of ${second.team}` : ''}`
+            : `${leader.total} pts${second ? ` · ${r2(leader.total - second.total)} ahead` : ''}`}</div>
         </div>
         <div className="tile">
           <div className="k">Top contestant</div>
