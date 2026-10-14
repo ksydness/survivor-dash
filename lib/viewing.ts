@@ -284,6 +284,11 @@ export async function act(body: ActionBody): Promise<ViewingState> {
   const canLock = () => isCommish(body.key) || (!!row && people.includes(row.created_by));
 
   switch (body.action) {
+    case 'checkkey': { // the hidden commissioner-key field: only says whether the key is right
+      if (!isCommish(body.key)) throw new ViewingError('That key didn’t work', 403);
+      break;
+    }
+
     case 'whoami': {
       if (typeof body.endpoint === 'string' && body.endpoint.startsWith('https://')) await store().setPeople(body.endpoint, people);
       break;
