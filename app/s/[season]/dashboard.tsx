@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import PushToggle from './PushToggle';
+import { usePullRefresh } from '../../PullToRefresh';
 import { CSS } from './dash/styles';
 import { IconBack, IconNext, IconPrev, IconRefresh, IconRules } from './dash/bits';
 import { asOf, weekLabel } from './dash/model';
@@ -65,6 +66,9 @@ export default function Dashboard({ season }: { season: number }) {
     load(sync);
     /* eslint-disable-next-line */
   }, [season]);
+
+  // pull-to-refresh in the home-screen app = the Refresh button (re-sync scores, bypass the cache)
+  usePullRefresh(() => load(true));
 
   // ?week=N opens the dashboard rewound to that sheet week (shareable link)
   useEffect(() => {
