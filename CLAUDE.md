@@ -239,7 +239,9 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
 - **Locking**: auto at the deadline or the moment every voter has answered every option (if the best
   clears the bar; else status `closed` → "Lock anyway" / add nights & reopen / add a date). The poll
   starter or the commissioner (`survivor-commish-key`, shared with the draft room; `/viewing?key=…` saves it)
-  can lock any option early, and cancel.
+  can lock any option early, and cancel. In the home-screen app (no address bar, storage separate from
+  Safari) the key is entered via a hidden field: tap the "Next viewing" title 5× within 2s → paste → checked
+  server-side (action `checkkey`); that phone then shows "Commissioner ✓ · Remove".
 - **Locked**: set the time (if TBD won) and where (Kenny & Lena's / Tony & Karina's / typed — `PLACES` in
   `lib/viewingModel.ts`), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
   "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
