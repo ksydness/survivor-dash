@@ -179,6 +179,16 @@ in bakeoff-dash with 🧁 branding — port changes to both.
   manifest) — 🔥 on `#0c0a09`. `viewport.themeColor = '#0c0a09'`.
 - `app/manifest.ts` → `/manifest.webmanifest` with `display: standalone` (Add to Home Screen opens
   full-screen). `app/not-found.tsx` — branded 404.
+- **Pull to refresh (home-screen app, 2026-10-13)**: `app/PullToRefresh.tsx`, rendered in
+  `app/layout.tsx`. Only active in standalone mode (Add to Home Screen), where iOS/Android give no
+  native pull-to-refresh; does nothing in a browser tab. Starts only at the top of the page, ignores
+  sideways swipes, triggers at 70px of damped pull. Pages opt in with `usePullRefresh(fn)` — the
+  dashboard uses `load(true)` (same as Refresh: bypasses the cache); everywhere else (homepage,
+  scoring, draft room) it calls `router.refresh()`, which re-renders server data and keeps client
+  state. Same file in bakeoff-dash.
+- **Vercel Web Analytics** (2026-10-13, PR #8): `@vercel/analytics` + `<Analytics />` in
+  `app/layout.tsx`; enabled in the Vercel project's Analytics tab. (The Vercel bot's PR #3 was
+  closed — it also added ESLint 10 / a Next 16 lint config / a lockfile.)
 - Hidden from search engines on purpose (friends-league, direct links only): `robots: { index:
   false, follow: false }` in layout metadata + `app/robots.ts` (`Disallow: /`). The site itself
   stays public (no Vercel Deployment Protection).
