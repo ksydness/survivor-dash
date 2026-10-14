@@ -10,10 +10,10 @@ import webpush from 'web-push';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LEAGUE as BASE_LEAGUE, SUPABASE_URL } from './draftConfig';
 import { VAPID_PUBLIC_KEY, PUSH_SUBJECT } from './pushConfig';
-import { getSeasons, getDraftData } from './data';
+import { getSeasons, getDraftData, getPlaces } from './data';
 import {
   type Answer, type Roster, type Viewing, type ViewingOption, type ViewingState, type Vote,
-  PLACES, barFor, buildRoster, tally, waitingOn, attendees, teamsIn, todayET, hourET, etToUtc,
+  PLACES, addressFor, barFor, buildRoster, tally, waitingOn, attendees, teamsIn, todayET, hourET, etToUtc,
   isYmd, isHhmm, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong, optKey,
   DEADLINE_HOUR, NUDGE_LEAD_H, REMINDER_HOUR, MAX_EPISODES,
 } from './viewingModel';
@@ -116,19 +116,36 @@ export async function getRoster(fresh = false): Promise<Roster> {
   return buildRoster(teams, votersCol);
 }
 
+/** Everyone in the current season's teams (voters and non-voters) — the "who's this phone for?" list. */
+export async function getLeagueNames(): Promise<{ names: string[]; voters: string[] }> {
+  const seasons = await getSeasons();
+  const cur = seasons.find(s => s.status === 'active' || s.status === 'drafting') ?? seasons[0];
+  const teams = cur ? (cur.teams.length ? cur.teams : (await getDraftData(cur.season))?.teams ?? []) : [];
+  const names: string[] = [];
+  for (const t of teams) for (const n of t.split(/\s*(?:\+|&|,|\band\b)\s*/i).map(x => x.trim()).filter(Boolean)) if (!names.includes(n)) names.push(n);
+  return { names, voters: (await getRoster()).voters.map(v => v.name) };
+}
+
 /* ── pushes ────────────────────────────────────────────────────────────── */
 
 interface Msg { title: string; body: string; url?: string; tag?: string }
 
-/** Send to every device in the league (or only the ones `pick` keeps, with a per-device message). */
+/**
+ * Send to the voters' devices (or only the ones `pick` keeps, with a per-device message). Viewing pings go
+ * ONLY to devices tagged with at least one current voter (`push_subscriptions.people`, set when the phone
+ * turns notifications on or picks "who's voting"). Non-voters (Anna, Dan) and untagged phones still get
+ * score pings (lib/push.ts) but never these.
+ */
 async function push(msg: Msg | ((people: string[]) => Msg | null), pick?: (people: string[]) => boolean) {
   if (LEAGUE !== BASE_LEAGUE || !process.env.VAPID_PRIVATE_KEY) return; // previews and unconfigured envs stay quiet
   try {
     webpush.setVapidDetails(PUSH_SUBJECT, VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+    const voters = new Set((await getRoster()).voters.map(v => v.name.toLowerCase()));
     const subs = await store().subs();
     const dead: string[] = [];
     await Promise.all(subs.map(async s => {
       const people = s.people ?? [];
+      if (!people.some(p => voters.has(p.toLowerCase()))) return;
       if (pick && !pick(people)) return;
       const m = typeof msg === 'function' ? msg(people) : msg;
       if (!m) return;
@@ -173,9 +190,22 @@ async function current(roster: Roster): Promise<{ row: Row | null; votes: Vote[]
   return { row, votes };
 }
 
+/** Quick picks + addresses for "where": the sheet's Places tab, else the built-in names (no addresses). */
+async function placeInfo(fresh = false): Promise<{ places: string[]; addresses: Record<string, string> }> {
+  const rows = await getPlaces(fresh);
+  if (!rows.length) return { places: PLACES, addresses: {} };
+  return { places: rows.map(p => p.name), addresses: Object.fromEntries(rows.filter(p => p.address).map(p => [p.name, p.address])) };
+}
+
+/** "At Tony & Karina’s · 92 Barnard Ave. Watertown, MA 02472" (address when the Places tab has one). */
+async function placeLine(place: string): Promise<string> {
+  const addr = addressFor(place, (await placeInfo()).addresses);
+  return addr ? `At ${place} · ${addr}` : `At ${place}`;
+}
+
 export async function getViewingState(fresh = false): Promise<ViewingState> {
-  const roster = await getRoster(fresh);
-  const base = { roster, bar: barFor(roster.teams.length), places: PLACES, now: new Date().toISOString() };
+  const [roster, pi] = await Promise.all([getRoster(fresh), placeInfo(fresh)]);
+  const base = { roster, bar: barFor(roster.teams.length), ...pi, now: new Date().toISOString() };
   if (!viewingConfigured()) return { ...base, configured: false, viewing: null, votes: [] };
   const { row, votes } = await current(roster);
   return { ...base, configured: true, viewing: row ? toViewing(row) : null, votes };
@@ -387,7 +417,11 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       if (row?.status !== 'locked') throw new ViewingError('Nothing is locked yet');
       const place = typeof body.place === 'string' ? body.place.trim().slice(0, 80) : '';
       const r = await save({ place: place || null });
-      if (place) await push({ title: `${whenShort(r.lock_date!, r.lock_time)} is at ${place}`, body: 'Tap for the details or to add it to your calendar.', tag: `viewing-${row.id}-where` });
+      if (place) {
+        const addr = addressFor(place, (await placeInfo()).addresses);
+        await push({ title: `${whenShort(r.lock_date!, r.lock_time)} is at ${place}`,
+          body: addr ? `${addr} — tap for directions.` : 'Tap for the details or to add it to your calendar.', tag: `viewing-${row.id}-where` });
+      }
       break;
     }
 
@@ -494,7 +528,7 @@ export async function tick(): Promise<Record<string, unknown>> {
     if (r) {
       await push({
         title: `Survivor tonight${row.lock_time ? `, ${timeLabel(row.lock_time).replace(':00', '')}` : ''}`,
-        body: [row.place ?? 'Where: not set yet', epLabel(row.episodes)].join(' · '),
+        body: [row.place ? (await placeLine(row.place)).replace(/^At /, '') : 'Where: not set yet', epLabel(row.episodes)].join(' · '),
         tag: `viewing-${row.id}-today`,
       });
       return { status: 'reminded' };
