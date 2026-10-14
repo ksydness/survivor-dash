@@ -76,9 +76,21 @@ export const VW_CSS = `
 .vw .y{color:var(--text)}.vw .m{color:var(--gold)}.vw .n{color:var(--neg)}.vw .q{color:var(--muted)}
 /* forms */
 .vw .field{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.vw input,.vw select{height:48px;border-radius:12px;border:1px solid var(--line2);background:var(--panel2);color:var(--text);font:inherit;font-size:16px;font-weight:600;letter-spacing:0;text-transform:none;padding:0 12px;color-scheme:dark;width:100%}
-.vw select.chip{height:40px;width:auto;border-radius:999px;font-size:14px;font-weight:700;padding:0 10px}
-.vw .chips{display:flex;flex-wrap:wrap;gap:8px}
+.vw input,.vw select{display:block;height:48px;min-width:0;max-width:100%;border-radius:12px;border:1px solid var(--line2);background-color:var(--panel2);color:var(--text);font:inherit;font-size:16px;font-weight:600;line-height:1.2;letter-spacing:0;text-transform:none;padding:0 12px;color-scheme:dark;width:100%;margin:0}
+/* iOS gives native date/select controls their own intrinsic width and height (the date box spilled into
+   the Time column) — strip the native look so the CSS sizes win; the select gets its own chevron */
+.vw input[type=date],.vw select{-webkit-appearance:none;appearance:none}
+.vw input[type=date]{text-align:left;line-height:46px}
+.vw input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;line-height:46px}
+.vw input[type=date]::-webkit-datetime-edit{padding:0;line-height:46px}
+.vw select{padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:14px}
+.vw select.chip{height:40px;width:auto;border-radius:999px;font-size:14px;font-weight:700;padding:0 32px 0 14px;background-position:right 11px center}
+.vw .field.inl{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:0 6px}
+.vw .field.inl span{text-transform:none;letter-spacing:0;font-weight:400}
+.vw .inrow{display:flex;gap:8px;margin-top:10px}
+.vw .inrow input{flex:1}
+.vw .inrow button{flex:none;height:48px;padding:0 18px;border-radius:12px;background:var(--panel2);border:1px solid var(--line2);font-size:15px;font-weight:700}
+.vw .chips{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .vw .tog{min-height:44px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line2);background:var(--panel2);color:var(--soft);font-size:15px;font-weight:700;display:inline-flex;align-items:center;gap:8px}
 .vw .tog[aria-pressed=true]{border-color:var(--accent);background:rgba(245,158,11,.12);color:var(--text)}
 .vw .tog.out[aria-pressed=true]{border-color:var(--neg);background:rgba(248,113,113,.12);color:var(--neg)}

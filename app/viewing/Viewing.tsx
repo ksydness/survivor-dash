@@ -54,9 +54,9 @@ function Stepper({ label, value, onChange, disabled }: { label: string; value: n
   );
 }
 
-function TimeSelect({ value, onChange, allowTbd = true, label }: { value: string | null; onChange: (t: string | null) => void; allowTbd?: boolean; label: string }) {
+function TimeSelect({ value, onChange, allowTbd = true, label, wide }: { value: string | null; onChange: (t: string | null) => void; allowTbd?: boolean; label: string; wide?: boolean }) {
   return (
-    <select className="chip" aria-label={label} value={value ?? TBD} onChange={e => onChange(e.target.value === TBD ? null : e.target.value)}>
+    <select className={wide ? undefined : 'chip'} aria-label={label} value={value ?? TBD} onChange={e => onChange(e.target.value === TBD ? null : e.target.value)}>
       {allowTbd && <option value={TBD}>Time TBD</option>}
       {TIMES.map(t => <option key={t} value={t}>{timeLabel(t)}</option>)}
     </select>
@@ -396,7 +396,7 @@ function AddNight({ v, busy, onAdd, onCancel }: { v: V; busy: boolean; onAdd: (o
       <h3 className="eyebrow">Add a night</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10, marginTop: 12 }}>
         <label className="field">Date<input type="date" value={date} min={addDays(dueDay, 1)} onChange={e => setDate(e.target.value)} /></label>
-        <label className="field">Time<TimeSelect value={time} onChange={setTime} label="Time" /></label>
+        <label className="field">Time<TimeSelect wide value={time} onChange={setTime} label="Time" /></label>
       </div>
       <p className="note" style={{ marginTop: 8 }}>Has to be after the vote deadline. Everyone gets a ping to vote on it.</p>
       <div className="row2" style={{ marginTop: 12 }}>
@@ -488,9 +488,9 @@ function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onW
           <div className="chips">
             {places.map(p => <button key={p} type="button" className="tog" disabled={busy} onClick={async () => { if (await act('set_place', { place: p }, 'Where is set — everyone just got a ping.')) setEditPlace(false); }}>{p}</button>)}
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <div className="inrow">
             <input type="text" placeholder="Somewhere else…" value={other} onChange={e => setOther(e.target.value)} aria-label="Somewhere else" />
-            <button type="button" className="chipbtn" style={{ height: 48 }} disabled={busy || !other.trim()} onClick={async () => { if (await act('set_place', { place: other }, 'Where is set — everyone just got a ping.')) { setOther(''); setEditPlace(false); } }}>Set</button>
+            <button type="button" disabled={busy || !other.trim()} onClick={async () => { if (await act('set_place', { place: other }, 'Where is set — everyone just got a ping.')) { setOther(''); setEditPlace(false); } }}>Set</button>
           </div>
           {editPlace && <button type="button" className="linkbtn" onClick={() => setEditPlace(false)}>Keep {v.place}</button>}
         </>)}
@@ -661,10 +661,10 @@ function AddDateForm({ busy, places, onSubmit }: { busy: boolean; places: string
     <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10 }}>
         <label className="field">Date<input type="date" value={date} min={today} onChange={e => setDate(e.target.value)} /></label>
-        <label className="field">Time<TimeSelect value={time} onChange={setTime} label="Time" /></label>
+        <label className="field">Time<TimeSelect wide value={time} onChange={setTime} label="Time" /></label>
       </div>
       <div>
-        <div className="field">Where <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>· optional, can set later</span></div>
+        <div className="field inl">Where <span>· optional, can set later</span></div>
         <div className="chips" style={{ marginTop: 8 }}>
           {[...places, 'Somewhere else'].map(p => {
             const val = p === 'Somewhere else' ? '__other' : p;
