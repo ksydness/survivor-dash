@@ -56,6 +56,12 @@ export default function Dashboard({ season }: { season: number }) {
     if (sync) { url.searchParams.delete('sync'); window.history.replaceState(null, '', url); }
     const t = url.searchParams.get('tab');
     if (isTab(t)) setTabState(t);
+    // ?tab=teams&team=X (homepage standings rows) opens that team's breakdown; drop the param once read
+    const team = url.searchParams.get('team');
+    if (team) {
+      if (t === 'teams') setFocusTeam(team);
+      url.searchParams.delete('team'); window.history.replaceState(null, '', url);
+    }
     load(sync);
     /* eslint-disable-next-line */
   }, [season]);

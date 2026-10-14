@@ -22,9 +22,10 @@ const post = (method: 'POST' | 'DELETE', body: unknown) =>
 
 /**
  * variant "pill" (default) = the original text pill; "icon" = a 44px bell icon button for the
- * compact app bar, which hands its hint text to the parent via onHint so it can show it below the bar.
+ * compact app bar, which hands its hint text to the parent via onHint so it can show it below the bar;
+ * "card" = the homepage's notify card (hidden, like the others, when push isn't available).
  */
-export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pill' | 'icon'; onHint?: (hint: string | null) => void } = {}) {
+export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pill' | 'icon' | 'card'; onHint?: (hint: string | null) => void } = {}) {
   const [state, setState] = useState<State>('loading');
   const [hint, setHint] = useState<string | null>(null);
   useEffect(() => { onHint?.(hint); /* eslint-disable-next-line */ }, [hint]);
@@ -86,6 +87,35 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
   };
   const label = state === 'on' ? '🔔 On' : state === 'busy' ? '🔔 …' : '🔔 Notify me';
   const title = state === 'on' ? 'Turn off score notifications' : 'Get notified when scores are posted';
+
+  // homepage card (styled by the homepage's .notify rules): bell, one-line pitch, a real button
+  if (variant === 'card') {
+    const on = state === 'on';
+    const sub = hint
+      ?? (on ? 'This phone gets a notification when each week’s scores are posted.'
+        : state === 'ios-install' ? 'On iPhone, add this site to your Home Screen first (Share → Add to Home Screen), then open it from there.'
+          : state === 'denied' ? 'Notifications are blocked for this site — allow them in your phone or browser settings, then reload.'
+            : 'One notification a week, when the new scores are in.');
+    const canTap = on || state === 'off' || state === 'busy';
+    return (
+      <section className="notify" aria-label="Score notifications">
+        <span className="bell" aria-hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" fill="none" />
+          </svg>
+        </span>
+        <div className="txt">
+          <b>{on ? 'You’re set' : 'Get a ping when scores post'}</b>
+          <span aria-live="polite">{sub}</span>
+        </div>
+        {canTap && (
+          <button type="button" className={on ? 'off' : 'go'} onClick={onClick} disabled={state === 'busy'} aria-pressed={on}>
+            {state === 'busy' ? '…' : on ? 'Turn off' : 'Notify me'}
+          </button>
+        )}
+      </section>
+    );
+  }
 
   if (variant === 'icon') return (
     <button type="button" className={`iconbtn ${state === 'on' ? 'on' : ''}`} onClick={onClick} disabled={state === 'busy'}

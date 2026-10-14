@@ -256,6 +256,23 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
 - **Team colors** are presets + a fallback palette in `dash/model.ts`; new team names render fine
   without a code change.
 
+## Homepage (`app/page.tsx`)
+
+Server-rendered from the same data as the dashboard (nothing re-scored). Styles: `app/_home/styles.ts`
+(CSS string scoped under `.home`, same approach as `dash/styles.ts`).
+
+1. **Current-season card** — the newest `active`/`drafting` season (else the newest season): recap
+   headline, mini standings (rank + movement, points, this week, players-left pips; each row opens
+   `/s/<n>?tab=teams&team=<team>`), then the **Open Season N** button. Keep the button above the fold:
+   it sits ~510px down, inside an iPhone SE's visible area — put new detail *below* it (the recap
+   sentence, top team, players still in are already there).
+2. While a season is **drafting**, that card reads the live-draft row (`getLiveDraft`): who's on the
+   clock, pick N of M, each team's picks, **Join the draft**; `_home/DraftRefresh.tsx` re-renders it
+   every 15s. Falls back to a plain "Draft in progress" card if the live draft can't be read.
+3. **Notify me** card — `PushToggle variant="card"` (hidden when push isn't configured/supported).
+4. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
+5. **Past seasons** — each with its champion and winning margin from the History tab.
+
 ## Dashboard tabs
 
 `app/s/[season]/dashboard.tsx` is the shell (compact app bar, full-width week picker, one swipeable
@@ -274,7 +291,7 @@ declared once as CSS variables in `dash/styles.ts`).
 1. **Leaderboard** (`dash/Leaderboard.tsx`) — week recap card, standings (▲/▼ movement, points
    back, bar vs leader, players-left pips); tap a team → its players with season + this-week points
    and a link to the Teams tab. Rank chart fits the screen. "Week by week" highlights in a disclosure.
-2. **Teams** (`dash/Teams.tsx`) — players left per team, Find a player, every roster as name chips
+2. **Teams** (`dash/Teams.tsx`, `?team=<name>` opens that team's breakdown) — players left per team, Find a player, every roster as name chips
    (out = dashed + crossed out); tap a name → player card; "Team breakdown" → where the points came
    from + team points by week.
 3. **Contestants** (`dash/Contestants.tsx`) — compact list (sort Total / Best week / Name, team
@@ -287,13 +304,14 @@ declared once as CSS variables in `dash/styles.ts`).
 6. **History** (`dash/History.tsx`) — reigning champs + titles; Dig deeper: finish by season,
    season-by-season results, points per season, all-time records.
 
-`PushToggle.tsx` takes `variant="icon"` (bell in the app bar; hint text bubbles up via `onHint`).
+`PushToggle.tsx` takes `variant="icon"` (bell in the app bar; hint text bubbles up via `onHint`) and
+`variant="card"` (the homepage's notify card).
 The default pill variant is unchanged, so bakeoff-dash's copy still matches if it isn't updated.
 
 ## Status / next steps
 
-Live at https://survivor-dash.vercel.app with seasons 46–50 final and Season 51 registered as
-`drafting` (first season on the live draft room). `prototype/index.html` is the original design
+Live at https://survivor-dash.vercel.app with seasons 46–50 final and Season 51 `active` (the
+first season drafted in the live draft room). `prototype/index.html` is the original design
 reference. Ideas not yet built: returning-player context in the draft room, a search/filter box for
 the 24-name pool, marking a contestant "out before the draft", an optional join code for picks, and
 the parked `future-db/` scoring migration.
