@@ -279,7 +279,12 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
 2. While a season is **drafting**, that card reads the live-draft row (`getLiveDraft`): who's on the
    clock, pick N of M, each team's picks, **Join the draft**; `_home/DraftRefresh.tsx` re-renders it
    every 15s. Falls back to a plain "Draft in progress" card if the live draft can't be read.
-3. **Notify me** card — `PushToggle variant="card"` (hidden when push isn't configured/supported).
+3. **Notify me** card — `PushToggle variant="card"`, a nudge only for people who haven't turned
+   notifications on: hidden once they're on (a one-visit "You're set" right after turning on), when
+   the browser has blocked them, or for good on that device after its × (`localStorage`
+   `survivor-notify-card-dismissed`). The bell in the top bar (`_home/HomeBar.tsx`, `variant="icon"`)
+   is always there to turn them on/off; toggles on one page stay in sync via a `survivor-push-state`
+   window event.
 4. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
 5. **Past seasons** — each with its champion and winning margin from the History tab.
 
