@@ -8,12 +8,15 @@ import PushToggle from './s/[season]/PushToggle';
 import DraftRefresh from './_home/DraftRefresh';
 import HomeBar from './_home/HomeBar';
 import { HOME_CSS } from './_home/styles';
+import ViewingCard from './_home/ViewingCard';
+import { getViewingState, viewingConfigured } from '@/lib/viewing';
+import type { ViewingState } from '@/lib/viewingModel';
 
 export const dynamic = 'force-dynamic';
 
 /*
  * Homepage: the current season first (live standings + one big "Open" button that stays above the
- * fold on small phones), then score notifications, all-time titles and past seasons with their
+ * fold on small phones), then the next viewing night (poll / locked, see /viewing), then score notifications, all-time titles and past seasons with their
  * champions. While a season is drafting, the top card becomes the draft's status + "Join the draft".
  * Everything is read from the sheet (and the live-draft row) — nothing is re-scored here.
  */
@@ -58,7 +61,11 @@ export default async function Home() {
 
   // the season people come for: the newest one that's live or drafting, else the newest one
   const cur = seasons.find(s => s.status === 'active' || s.status === 'drafting') ?? seasons[0] ?? null;
-  const [hero, history] = await Promise.all([cur ? loadHero(cur) : Promise.resolve(null), getHistory()]);
+  const [hero, history, viewing] = await Promise.all([
+    cur ? loadHero(cur) : Promise.resolve(null), getHistory(),
+    // the next watch night (poll / locked) — never blocks the page if the scheduler can't be read
+    viewingConfigured() ? getViewingState().catch(() => null) : Promise.resolve(null as ViewingState | null),
+  ]);
 
   const h = historyModel({ history });
   const champions = h.teams.filter(t => t.titles.length > 0);
@@ -86,6 +93,8 @@ export default async function Home() {
             <Link className="cta" href={`/s/${hero.row.season}`}>Open {seasonName(hero.row)}<Chevron /></Link>
           </section>
         )}
+
+        {viewing && viewing.roster.voters.length > 0 && <ViewingCard st={viewing} />}
 
         {seasons.length > 0 && <PushToggle variant="card" />}
 

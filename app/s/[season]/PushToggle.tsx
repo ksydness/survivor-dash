@@ -87,7 +87,7 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
       if (!res.ok) throw new Error();
       setState('on');
       setJustOn(true);
-      setHint('You’ll get a notification when each week’s scores are posted.');
+      setHint('You’ll get pings for new scores and viewing nights.');
     } catch { setState('off'); setHint('Couldn’t turn on notifications — try again.'); }
   }
 
@@ -118,9 +118,9 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
     if (dismissed || state === 'denied' || (on && !justOn)) return null;
     const dismiss = () => { setDismissed(true); try { localStorage.setItem(CARD_DISMISSED, '1'); } catch { /* private mode */ } };
     const sub = hint
-      ?? (on ? 'This phone gets a notification when each week’s scores are posted.'
+      ?? (on ? 'This phone gets pings for new scores and viewing nights.'
         : state === 'ios-install' ? 'On iPhone, add this site to your Home Screen first (Share → Add to Home Screen), then open it from there.'
-          : 'One notification a week, when the new scores are in.');
+          : 'New scores each week, plus viewing-night polls and reminders.');
     const canTap = on || state === 'off' || state === 'busy';
     return (
       <section className="notify" aria-label="Score notifications">
@@ -130,7 +130,7 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
           </svg>
         </span>
         <div className="txt">
-          <b>{on ? 'You’re set' : 'Get a ping when scores post'}</b>
+          <b>{on ? 'You’re set' : 'Get pings for scores & viewing nights'}</b>
           <span aria-live="polite">{sub}</span>
           {canTap && (
             <button type="button" className={on ? 'off' : 'go'} onClick={onClick} disabled={state === 'busy'} aria-pressed={on}>
