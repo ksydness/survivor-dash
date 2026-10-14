@@ -400,6 +400,25 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       break;
     }
 
+    case 'reschedule': { // move a locked night in place instead of cancel + re-add
+      if (row?.status !== 'locked' || !row.lock_date) throw new ViewingError('Nothing is locked yet');
+      if (!canLock()) throw new ViewingError('Only whoever set it up (or the commissioner) can move it', 403);
+      const date = body.date; const time = body.time ?? null;
+      if (!isYmd(date) || date < today) throw new ViewingError('Pick a date from today on');
+      if (time !== null && !isHhmm(time)) throw new ViewingError('Bad time');
+      if (date === row.lock_date && time === row.lock_time) throw new ViewingError('That’s already the plan');
+      const newDay = date !== row.lock_date;
+      // a new day clears "can't make it" (it was about the old day) and re-arms the morning-of reminder
+      await save({ lock_date: date, lock_time: time, ...(newDay ? { drops: [], reminded_at: null } : {}) });
+      await push({
+        title: `Moved: ${whenShort(date, time)}`,
+        body: [`Was ${whenShort(row.lock_date, row.lock_time)}`, row.place ? `At ${row.place}` : null,
+          newDay && row.drops.length ? 'Can’t make it? Tap to say so again' : null].filter(Boolean).join(' · '),
+        tag: `viewing-${row.id}-moved`,
+      });
+      break;
+    }
+
     case 'set_episodes': {
       if (!row || (row.status !== 'polling' && row.status !== 'locked')) throw new ViewingError('Nothing to change');
       await save({ episodes: clampEps(body.episodes, row.episodes) });
