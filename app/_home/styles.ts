@@ -88,5 +88,14 @@ export const HOME_CSS = `
 .home .chev{color:var(--faint)}
 .home .msg{color:var(--faint);text-align:center;padding:24px 8px}
 .home .msg.err{color:var(--neg);font-size:13px}
+.home .vbtns{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.home .vbtns .cta{margin-top:0}
+.home .ghostbtn{display:flex;align-items:center;justify-content:center;height:48px;border-radius:14px;background:var(--panel2);border:1px solid #3a342f;font-size:15px;font-weight:700}
+.home .vlead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:12px;border-radius:12px;background:var(--panel2);font-size:14px;color:var(--soft)}
+.home .vlead b{color:var(--text)}
+.home .vlead em{font-style:normal;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-left:6px}
+.home .vcount{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.home .vdots{display:inline-flex;gap:4px}
+.home .vdots i{width:10px;height:10px;border-radius:999px;border:1.5px solid #57534e;box-sizing:border-box}
 .home .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 `;
