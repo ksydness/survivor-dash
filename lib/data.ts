@@ -48,8 +48,8 @@ export async function getDraftData(season: number, fresh = false): Promise<Draft
   return { meta: { season: row.season, name: row.name, status: row.status }, teams, cast };
 }
 
-/** Read all-time History tab (tidy: Season | Place | Team | Points). */
-async function getHistory(fresh = false) {
+/** Read all-time History tab (tidy: Season | Place | Team | Points). Never throws — [] when unset or unreadable. */
+export async function getHistory(fresh = false) {
   const url = HISTORY_CSV_URL();
   if (!url) return [];
   try { return parseHistory(await fetchCsv(url, { fresh })); }
