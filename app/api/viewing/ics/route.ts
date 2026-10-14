@@ -1,27 +1,12 @@
 import { getViewingState } from '@/lib/viewing';
-import { addDays, addressFor, epLabel, etToUtc } from '@/lib/viewingModel';
+import { buildIcs } from '@/lib/viewingIcs';
 
 export const dynamic = 'force-dynamic';
 
-// "Add to calendar": the locked night as an .ics file (3 hours; all-day when the time is TBD).
-const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-const esc = (s: string) => s.replace(/[\\,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
-
+// "Just this night": the locked night as a one-off .ics (3 hours; all-day when the time is TBD). It won't
+// update itself — the subscribable feed at /calendar.ics does (same UID, so the two describe one event).
 export async function GET() {
   const { viewing: v, addresses } = await getViewingState();
   if (!v || v.status !== 'locked' || !v.lock_date) return new Response('No viewing is locked yet.', { status: 404 });
-  const site = process.env.NEXT_PUBLIC_SITE_URL || 'https://survivor-dash.vercel.app';
-  const when = v.lock_time
-    ? [`DTSTART:${stamp(etToUtc(v.lock_date, v.lock_time))}`, `DTEND:${stamp(new Date(etToUtc(v.lock_date, v.lock_time).getTime() + 3 * 3600_000))}`]
-    : [`DTSTART;VALUE=DATE:${v.lock_date.replace(/-/g, '')}`, `DTEND;VALUE=DATE:${addDays(v.lock_date, 1).replace(/-/g, '')}`];
-  const addr = addressFor(v.place, addresses);
-  const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//survivor-dash//viewing//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    'BEGIN:VEVENT', `UID:viewing-${v.id}@survivor-dash`, `DTSTAMP:${stamp(new Date())}`, ...when,
-    `SUMMARY:${esc(`Survivor viewing · ${epLabel(v.episodes)}`)}`,
-    ...(v.place ? [`LOCATION:${esc(addr ?? v.place)}`] : []),
-    `DESCRIPTION:${esc(`Fantasy Survivor viewing night${addr ? ` at ${v.place}` : ""}. Details: ${site}/viewing`)}`,
-    `URL:${site}/viewing`, 'END:VEVENT', 'END:VCALENDAR',
-  ].join('\r\n');
-  return new Response(ics, { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="survivor-viewing.ics"', 'Cache-Control': 'no-store' } });
+  return new Response(buildIcs([v], addresses, false), { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="survivor-viewing.ics"', 'Cache-Control': 'no-store' } });
 }
