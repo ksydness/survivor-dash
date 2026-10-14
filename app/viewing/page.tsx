@@ -17,7 +17,7 @@ export default async function ViewingPage({ searchParams }: { searchParams: Prom
   let initial: ViewingState;
   try { initial = await getViewingState(); }
   catch {
-    initial = { configured: false, roster: { voters: [], teams: [] }, viewing: null, votes: [], bar: barFor(4), places: PLACES, now: new Date().toISOString() };
+    initial = { configured: false, roster: { voters: [], teams: [] }, viewing: null, votes: [], bar: barFor(4), places: PLACES, addresses: {}, now: new Date().toISOString() };
   }
   return (
     <div className="vw">
