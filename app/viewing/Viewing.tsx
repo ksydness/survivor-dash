@@ -127,8 +127,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(j.error || 'Something went wrong — try again.'); if (r.status === 409) load(); window.scrollTo({ top: 0, behavior: 'smooth' }); return false; }
-      setSt(j); setScreen('main'); if (done) setFlash(done);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setSt(j); setScreen('main');
+      if (done) { setFlash(done); window.scrollTo({ top: 0, behavior: 'smooth' }); }
       return true;
     } catch { setErr('Couldn’t reach the server — check your connection.'); return false; }
     finally { setBusy(false); }
@@ -327,6 +327,23 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
   const [adding, setAdding] = useState(false);
   const [eps, setEps] = useState(v.episodes);
   useEffect(() => setEps(v.episodes), [v.episodes]);
+  // how far this phone's voter is: answers save as they tap — "Done" just moves them on to the results
+  const answered = who ? v.options.filter(o => votes.some(x => x.option_id === o.id && x.person === who.me)).length : 0;
+  const total = v.options.length;
+  const [showResults, setShowResults] = useState(() => !!who && total > 0 && answered === total);
+  // someone who already answered everything comes back to the results (once, when the phone's name loads)
+  const autoShown = useRef(false);
+  useEffect(() => {
+    if (!who || autoShown.current) return;
+    autoShown.current = true;
+    if (total > 0 && answered === total) setShowResults(true);
+  }, [who]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (showResults && who) return (
+    <Results v={v} votes={votes} roster={roster} bar={bar} t={t} waiting={waiting} me={who.me} answered={answered}
+      canLock={canLock} busy={busy} eps={eps} act={act} onChange={() => { setShowResults(false); toTop(); }} />
+  );
 
   return (<>
     <section className="card hi">
@@ -341,6 +358,12 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
     </section>
 
     {!who && <button type="button" className="cta" onClick={onWho}>Tell us who you are to vote</button>}
+    {who && (
+      <div className="who" role="status"><span className="t">
+        {answered === 0 ? <>Tap <b>Yes</b>, <b>Maybe</b> or <b>No</b> for each night — each tap saves.</>
+          : <><b>{answered} of {total}</b> answered · saved ✓</>}
+      </span></div>
+    )}
 
     {byDate.map(row => (
       <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={people} me={who?.me ?? null}
@@ -353,6 +376,13 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
       ? <AddNight v={v} busy={busy} onCancel={() => setAdding(false)} onAdd={async (o) => { if (await act('add_option', o, `Added ${dayLabel(o.date)}.`)) setAdding(false); }} />
       : who && <button type="button" className="dashed" onClick={() => setAdding(true)}>+ None of these work? Add a night</button>}
 
+    {who && (<>
+      <button type="button" className="cta" disabled={busy || answered === 0} onClick={() => { setShowResults(true); toTop(); }}>
+        {answered === 0 ? 'Vote on a night to finish' : 'Done — see results'}
+      </button>
+      {answered > 0 && answered < total && <p className="note" style={{ textAlign: 'center', marginTop: -4 }}>{total - answered} night{total - answered === 1 ? '' : 's'} still unanswered — you can finish anyway.</p>}
+    </>)}
+
     <section className="card">
       <Stepper label="Episodes to watch" value={eps} disabled={busy} onChange={(n) => { setEps(n); act('set_episodes', { episodes: n }); }} />
       {canLock && leader && (<>
@@ -364,6 +394,60 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
       </>)}
     </section>
     {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm('Cancel this poll for everyone?')) act('cancel', {}, 'Poll cancelled.'); }}>Cancel this poll</button>}
+  </>);
+}
+
+/* ── after voting: where it stands ────────────────────────────────────── */
+
+function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, busy, eps, act, onChange }: {
+  v: V; votes: Vote[]; roster: Roster; bar: number; t: ReturnType<typeof tally>; waiting: string[]; me: string; answered: number;
+  canLock: boolean; busy: boolean; eps: number; act: Act; onChange: () => void;
+}) {
+  const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
+  const leader = t[0];
+  const allIn = waiting.length === 0;
+  return (<>
+    <section className="card hi">
+      <div className="hrow"><h2 className="eyebrow">Your votes are in</h2><span className="pill"><i />Poll open</span></div>
+      <h2 className="title">Thanks, {me} ✓</h2>
+      <p className="lede">{allIn ? 'Everyone has voted — it locks in a moment.'
+        : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. It locks itself then, or as soon as everyone has voted — everyone gets a ping.</>}</p>
+      <div className="facts">
+        <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
+        {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
+      </div>
+    </section>
+
+    <section className="card" aria-label="Where it stands">
+      <div className="hrow"><h3 className="eyebrow">Where it stands</h3><span className="note">needs {bar} of {roster.teams.length} teams</span></div>
+      <div style={{ marginTop: 6 }}>
+        {t.map((row, i) => {
+          const mine = votes.find(x => x.option_id === row.option.id && x.person === me)?.answer;
+          return (
+            <div key={row.option.id} className="trow" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <b style={{ display: 'block' }}>{dayLabel(row.option.date)} · {timeLabel(row.option.time)}{i === 0 && leader.yes.length > 0 && <span className="lead-tag" style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginLeft: 8 }}>Leading</span>}</b>
+                <span className="note">{row.yes.length} yes · {row.maybe.length} maybe · {row.no.length} no · you said <b style={{ color: 'var(--text)' }}>{mine ? word[mine] : '—'}</b></span>
+              </div>
+              <div style={{ textAlign: 'right', flex: 'none' }}>
+                <Dots roster={roster} inTeams={row.teamsIn} />
+                <div className="note num" style={{ color: row.clears ? 'var(--gold)' : undefined }}>{row.teamsIn.length} of {roster.teams.length}{row.clears ? ' ✓' : ''}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+
+    {answered < v.options.length && <p className="note" style={{ textAlign: 'center' }}>You skipped {v.options.length - answered} night{v.options.length - answered === 1 ? '' : 's'}.</p>}
+    <button type="button" className="ghost" onClick={onChange}>Change my votes</button>
+    {canLock && leader && (
+      <button type="button" className="cta sm" disabled={busy}
+        onClick={() => act('lock', { option_id: leader.option.id, episodes: eps }, `Locked ${dayLabel(leader.option.date)} — everyone just got a ping.`)}>
+        Lock {dayLabel(leader.option.date)}{leader.option.time ? ` · ${timeLabel(leader.option.time)}` : ''} now
+      </button>
+    )}
+    <Link className="linkbtn" href="/" style={{ textAlign: 'center' }}>Back to the leaderboard</Link>
   </>);
 }
 
