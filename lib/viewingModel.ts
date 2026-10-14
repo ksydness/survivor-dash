@@ -6,6 +6,7 @@ export const DEADLINE_HOUR = 21;   // votes are due at 9 PM (Eastern) on the cho
 export const NUDGE_LEAD_H = 27;    // reminder to non-voters 27h before the deadline (≈ 6 PM the evening before)
 export const REMINDER_HOUR = 10;   // morning-of reminder at 10 AM
 export const MAX_EPISODES = 4;
+export const MAX_TIMES_PER_DAY = 4; // start times one poll day can offer (each is its own option)
 
 export type Answer = 'y' | 'm' | 'n';
 export type ViewingStatus = 'polling' | 'locked' | 'closed' | 'cancelled' | 'superseded';

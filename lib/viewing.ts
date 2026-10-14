@@ -15,7 +15,7 @@ import {
   type Answer, type Roster, type Viewing, type ViewingOption, type ViewingState, type Vote,
   PLACES, addressFor, barFor, buildRoster, tally, waitingOn, attendees, teamsIn, todayET, hourET, etToUtc,
   isYmd, isHhmm, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong, optKey,
-  DEADLINE_HOUR, NUDGE_LEAD_H, REMINDER_HOUR, MAX_EPISODES,
+  DEADLINE_HOUR, NUDGE_LEAD_H, REMINDER_HOUR, MAX_EPISODES, MAX_TIMES_PER_DAY,
 } from './viewingModel';
 
 // Preview deployments get their own league so testing never touches the real poll or pings phones.
@@ -33,6 +33,7 @@ const COLS = 'id,status,created_by,created_at,version,deadline,episodes,options,
 
 interface Store {
   latest(): Promise<Row | null>;
+  lockedRows(): Promise<Row[]>;   // every locked night (calendar feed), newest first
   insert(r: Partial<Row>): Promise<Row>;
   update(id: string, version: number, patch: Partial<Row>): Promise<Row | null>; // null = version conflict
   votes(id: string): Promise<Vote[]>;
@@ -50,6 +51,10 @@ const supabaseStore: Store = {
   async latest() {
     return must(await db().from('viewings').select(COLS).eq('league', LEAGUE)
       .in('status', ['polling', 'locked', 'closed']).order('created_at', { ascending: false }).limit(1).maybeSingle()) as Row | null;
+  },
+  async lockedRows() {
+    return must(await db().from('viewings').select(COLS).eq('league', LEAGUE).eq('status', 'locked')
+      .order('lock_date', { ascending: false }).limit(30)) as Row[];
   },
   async insert(r) {
     return must(await db().from('viewings').insert({ ...r, league: LEAGUE }).select(COLS).single()) as Row;
@@ -81,6 +86,7 @@ const supabaseStore: Store = {
 const mem = ((globalThis as { __viewingMem?: { rows: Row[]; votes: (Vote & { viewing_id: string })[] } }).__viewingMem ??= { rows: [], votes: [] });
 const memoryStore: Store = {
   async latest() { return [...mem.rows].reverse().find(r => ['polling', 'locked', 'closed'].includes(r.status)) ?? null; },
+  async lockedRows() { return mem.rows.filter(r => r.status === 'locked').map(r => ({ ...r })); },
   async insert(r) {
     const row = { id: Math.random().toString(36).slice(2), created_at: new Date().toISOString(), version: 0, deadline: null, episodes: 2, options: [],
       lock_date: null, lock_time: null, locked_at: null, locked_by: null, place: null, drops: [], nudged_at: null, reminded_at: null, league: LEAGUE, ...r } as Row;
@@ -211,6 +217,13 @@ export async function getViewingState(fresh = false): Promise<ViewingState> {
   return { ...base, configured: true, viewing: row ? toViewing(row) : null, votes };
 }
 
+/** Every locked night (past and upcoming, cancelled ones excluded) + addresses, for the calendar feed. */
+export async function getCalendarNights(): Promise<{ nights: Viewing[]; addresses: Record<string, string> }> {
+  if (!viewingConfigured()) return { nights: [], addresses: {} };
+  const [rows, pi] = await Promise.all([store().lockedRows(), placeInfo()]);
+  return { nights: rows.map(toViewing), addresses: pi.addresses };
+}
+
 /* ── locking ───────────────────────────────────────────────────────────── */
 
 /** Close a poll when its deadline has passed or every voter has answered every option. */
@@ -270,7 +283,7 @@ function cleanOptions(raw: unknown, today: string): ViewingOption[] {
     if (!isYmd(date) || date < today) throw new ViewingError('Nights have to be today or later');
     if (time !== null && !isHhmm(time)) throw new ViewingError('Bad time');
     if (out.some(x => x.date === date && x.time === time)) continue;
-    if (out.filter(x => x.date === date).length >= 2) throw new ViewingError('Up to two times per day');
+    if (out.filter(x => x.date === date).length >= MAX_TIMES_PER_DAY) throw new ViewingError(`Up to ${MAX_TIMES_PER_DAY} times per day`);
     if (time === null && out.some(x => x.date === date)) throw new ViewingError('“Time TBD” can’t share a day with a set time');
     if (time !== null && out.some(x => x.date === date && x.time === null)) throw new ViewingError('“Time TBD” can’t share a day with a set time');
     out.push({ id: rid(), date, time });
