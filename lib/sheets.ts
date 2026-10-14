@@ -294,3 +294,20 @@ export function parseHistory(rows: string[][]) {
     .filter(r => /^\d+$/.test((r[0] || '').trim()) && (r[2] || '').trim())
     .map(r => ({ season: num(r[0]), place: num(r[1]), team: (r[2] || '').trim(), points: num(r[3]) }));
 }
+
+/**
+ * The hub workbook's "Places" tab — where viewing nights can be. Columns (found by header):
+ * Name | Address. Rows without a name are skipped; Address is optional.
+ */
+export function parsePlaces(rows: string[][]): { name: string; address: string }[] {
+  const head = (rows[0] || []).map(h => (h || '').trim().toLowerCase());
+  const iName = Math.max(0, head.findIndex(h => /^(name|place|host)s?$/.test(h)));
+  const iAddr = head.findIndex(h => /^address/.test(h));
+  const out: { name: string; address: string }[] = [];
+  for (const r of rows.slice(1)) {
+    const name = (r[iName] || '').trim();
+    if (!name || out.some(p => p.name === name)) continue;
+    out.push({ name: name.slice(0, 80), address: iAddr >= 0 ? (r[iAddr] || '').trim() : '' });
+  }
+  return out;
+}
