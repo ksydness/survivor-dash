@@ -232,8 +232,8 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
 - **Who**: each phone picks "who are you" + anyone it votes for (couples) — `localStorage`
   `survivor-viewer` = `{ me, also[] }`. A vote someone casts for themselves always beats one cast for them
   (`cast_by`); results show "by Kenny". Honor system, like the draft room.
-- **Poll**: anyone starts one (one open at a time; a closed one is superseded). Each day = one time, two
-  times (two options) or Time TBD. Yes / Maybe / No per option. A team is "in" if anyone on it says Yes;
+- **Poll**: anyone starts one (one open at a time; a closed one is superseded). Each day = one or more
+  start times (up to `MAX_TIMES_PER_DAY` = 4, each its own option; 12 options max per poll) or Time TBD. Yes / Maybe / No per option. A team is "in" if anyone on it says Yes;
   bar = 3 of 4 teams (`barFor`). Best = most teams → most Yes → earliest. Votes due 9 PM ET on a day before
   the first night.
 - **Locking**: auto at the deadline or the moment every voter has answered every option (if the best
@@ -243,7 +243,7 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   Safari) the key is entered via a hidden field: tap the "Next viewing" title 5× within 2s → paste → checked
   server-side (action `checkkey`); that phone then shows "Commissioner ✓ · Remove".
 - **Locked**: set the time (if TBD won) and where (quick picks from the hub workbook's **Places** tab, or
-  typed), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
+  typed), episodes stepper (anyone, any time), Add to calendar (see Calendar below),
   "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
   Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
   locked row in place and pings "Moved: …"; a new *day* clears drops and re-arms the morning-of reminder.
@@ -257,6 +257,15 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   the address. Names match loosely (`placeKey`: `&`/`+`/`and`, curly/straight apostrophes, case), so older
   rows saved as "Tony & Karina’s" still find "Tony + Karina's". Tab missing → falls back to `PLACES`
   (no addresses). A typed place gets a directions link from its text.
+- **Calendar** (2026-10-14): `/calendar.ics` is a subscribable feed of every locked night (cancelled ones
+  drop out), built by `lib/viewingIcs.ts`. Each night keeps UID `viewing-<row id>@survivor-dash` for life and
+  `SEQUENCE` = the row's `version`, so subscribed calendars update moves / time / place / episodes in place
+  and remove cancellations. `REFRESH-INTERVAL`/`X-PUBLISHED-TTL` = 1h (Apple honors; Google re-fetches every
+  several hours on its own schedule). "Add to calendar" on the locked card opens a box: Subscribe
+  (`webcal://` on Apple devices, Google's `calendar/r?cid=webcal://…` elsewhere, the other as secondary) +
+  "Just this night (won't update)" → the one-off `/api/viewing/ics` (same builder, same UID). When nothing is
+  locked, a "Get every viewing night in your calendar · Subscribe" note sits under the main card.
+  `robots.ts` allows `/calendar.ics` (Google's importer honors robots.txt); everything else stays disallowed.
 - **Pushes** (same subscriptions as score notifications, `league = 'survivor'`; tap opens `/viewing`): poll
   started, night added, reopened, locked, moved, time/where set, someone drops, cancelled, no night cleared the bar;
   10 AM morning-of reminder. **Viewing pushes only go to devices whose `push_subscriptions.people` include a
