@@ -406,6 +406,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
   const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
   const leader = t[0];
   const allIn = waiting.length === 0;
+  const [open, setOpen] = useState<string | null>(null);
   return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Your votes are in</h2><span className="pill"><i />Poll open</span></div>
@@ -420,11 +421,14 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
 
     <section className="card" aria-label="Where it stands">
       <div className="hrow"><h3 className="eyebrow">Where it stands</h3><span className="note">needs {bar} of {roster.teams.length} teams</span></div>
-      <div style={{ marginTop: 6 }}>
+      <p className="note" style={{ marginTop: 4 }}>Tap a night to see who voted.</p>
+      <div style={{ marginTop: 2 }}>
         {t.map((row, i) => {
           const mine = votes.find(x => x.option_id === row.option.id && x.person === me)?.answer;
-          return (
-            <div key={row.option.id} className="trow" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          const isOpen = open === row.option.id;
+          return (<div key={row.option.id}>
+            <button type="button" className="trow" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : row.option.id)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', background: 'none', border: 0, borderBottom: '1px solid var(--line)', color: 'inherit', textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
               <div style={{ minWidth: 0 }}>
                 <b style={{ display: 'block' }}>{dayLabel(row.option.date)} · {timeLabel(row.option.time)}{i === 0 && leader.yes.length > 0 && <span className="lead-tag" style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginLeft: 8 }}>Leading</span>}</b>
                 <span className="note">{row.yes.length} yes · {row.maybe.length} maybe · {row.no.length} no · you said <b style={{ color: 'var(--text)' }}>{mine ? word[mine] : '—'}</b></span>
@@ -433,8 +437,12 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
                 <Dots roster={roster} inTeams={row.teamsIn} />
                 <div className="note num" style={{ color: row.clears ? 'var(--gold)' : undefined }}>{row.teamsIn.length} of {roster.teams.length}{row.clears ? ' ✓' : ''}</div>
               </div>
-            </div>
-          );
+              <span style={{ flex: 'none', color: 'var(--muted)', display: 'flex', transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}><Chev /></span>
+            </button>
+            {isOpen && <div className="tray" style={{ borderTop: 0, borderRadius: 12, margin: '8px 0 6px' }}>
+              <VoteTray optionId={row.option.id} teamsIn={row.teamsIn} votes={votes} roster={roster} />
+            </div>}
+          </div>);
         })}
       </div>
     </section>
@@ -483,25 +491,33 @@ function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVot
       </button>
       {open && (
         <div className="tray">
-          {roster.teams.map(t => (
-            <div key={t} className="tteam">
-              <div className="th"><span className="dots"><i style={{ background: colorFor(t, roster.teams.indexOf(t)), borderColor: colorFor(t, roster.teams.indexOf(t)) }} /></span>{t}{row.teamsIn.includes(t) && <em>In</em>}</div>
-              <div className="ps">
-                {roster.voters.filter(x => x.team === t).map(p => {
-                  const vt = votes.find(x => x.option_id === o.id && x.person === p.name);
-                  return (
-                    <span key={p.name} className="pchip">{p.name} <b className={vt?.answer ?? 'q'}>{vt ? word[vt.answer] : 'no vote'}</b>
-                      {vt && vt.cast_by !== p.name && <small>by {vt.cast_by}</small>}</span>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          <VoteTray optionId={o.id} teamsIn={row.teamsIn} votes={votes} roster={roster} />
           {canLock && <button type="button" className="ghost" style={{ marginTop: 12 }} disabled={busy} onClick={onLock}>{lockLabel}</button>}
         </div>
       )}
     </section>
   );
+}
+
+/** Everyone's answer for one night, team by team ("by Kenny" when someone voted for them). */
+function VoteTray({ optionId, teamsIn, votes, roster }: { optionId: string; teamsIn: string[]; votes: Vote[]; roster: Roster }) {
+  const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
+  return (<>
+    {roster.teams.map((t, i) => (
+      <div key={t} className="tteam">
+        <div className="th"><span className="dots"><i style={{ background: colorFor(t, i), borderColor: colorFor(t, i) }} /></span>{t}{teamsIn.includes(t) && <em>In</em>}</div>
+        <div className="ps">
+          {roster.voters.filter(x => x.team === t).map(p => {
+            const vt = votes.find(x => x.option_id === optionId && x.person === p.name);
+            return (
+              <span key={p.name} className="pchip">{p.name} <b className={vt?.answer ?? 'q'}>{vt ? word[vt.answer] : 'no vote'}</b>
+                {vt && vt.cast_by !== p.name && <small>by {vt.cast_by}</small>}</span>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </>);
 }
 
 function AddNight({ v, busy, onAdd, onCancel }: { v: V; busy: boolean; onAdd: (o: { date: string; time: string | null }) => void; onCancel: () => void }) {
