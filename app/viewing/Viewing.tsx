@@ -57,7 +57,7 @@ function Stepper({ label, value, onChange, disabled }: { label: string; value: n
 function TimeSelect({ value, onChange, allowTbd = true, label, wide }: { value: string | null; onChange: (t: string | null) => void; allowTbd?: boolean; label: string; wide?: boolean }) {
   return (
     <select className={wide ? undefined : 'chip'} aria-label={label} value={value ?? TBD} onChange={e => onChange(e.target.value === TBD ? null : e.target.value)}>
-      {allowTbd && <option value={TBD}>Time TBD</option>}
+      {allowTbd && <option value={TBD}>{wide ? 'TBD' : 'Time TBD'}</option>}
       {TIMES.map(t => <option key={t} value={t}>{timeLabel(t)}</option>)}
     </select>
   );
@@ -447,6 +447,11 @@ function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onW
   const [time, setTime] = useState<string | null>('19:00');
   const [cant, setCant] = useState(false);
   const [showWho, setShowWho] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [newDate, setNewDate] = useState(date);
+  const [newTime, setNewTime] = useState<string | null>(v.lock_time);
+  const openMove = () => { setNewDate(date); setNewTime(v.lock_time); setMoving(true); };
+  const unchanged = newDate === date && newTime === v.lock_time;
   const [, m, d] = date.split('-').map(Number);
   const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const isPreset = !!v.place && places.includes(v.place);
@@ -460,13 +465,30 @@ function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onW
         <div style={{ minWidth: 0 }}>
           <div className="big">{weekdayLong(date)}{v.lock_time ? ` · ${timeLabel(v.lock_time)}` : ''}</div>
           <div className="lede" style={{ marginTop: 3 }}>{v.locked_by === 'auto' ? 'Locked by vote' : v.locked_by ? `Locked by ${v.locked_by}` : 'Locked'}</div>
+          {canLock && !moving && <button type="button" className="linkbtn" style={{ paddingBottom: 0 }} onClick={openMove}>Change date or time</button>}
         </div>
       </div>
 
-      {!v.lock_time && (
+      {moving && (
+        <div className="box">
+          <div className="t">Move it</div>
+          <div className="s">Everyone gets a ping with the new date and time.{v.drops.length ? ' A new day clears “can’t make it”.' : ''}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10, marginTop: 12 }}>
+            <label className="field">Date<input type="date" value={newDate} min={todayET()} onChange={e => setNewDate(e.target.value)} /></label>
+            <label className="field">Time<TimeSelect wide value={newTime} onChange={setNewTime} label="Time" /></label>
+          </div>
+          <div className="row2" style={{ marginTop: 12 }}>
+            <button type="button" className="ghost" onClick={() => setMoving(false)}>Never mind</button>
+            <button type="button" className="cta sm" disabled={busy || !newDate || unchanged}
+              onClick={async () => { if (await act('reschedule', { date: newDate, time: newTime }, `Moved to ${dayLabel(newDate)} — everyone just got a ping.`)) setMoving(false); }}>Move it</button>
+          </div>
+        </div>
+      )}
+
+      {!v.lock_time && !moving && (
         <div className="box">
           <div className="t">What time?</div>
-          <div className="s">The day won with “Time TBD” — set a start time and everyone gets a ping.</div>
+          <div className="s">No start time yet — set one and everyone gets a ping.</div>
           <div className="chips"><TimeSelect value={time} onChange={setTime} allowTbd={false} label="Start time" />
             <button type="button" className="chipbtn" disabled={busy || !time} onClick={() => act('set_time', { time }, 'Time set — everyone just got a ping.')}>Set time</button></div>
         </div>
