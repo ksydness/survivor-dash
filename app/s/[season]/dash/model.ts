@@ -212,7 +212,7 @@ export function stealsAndBusts(d: SeasonPayload, picks: Pick[]) {
 }
 
 /* ── history ── */
-export function historyModel(d: SeasonPayload) {
+export function historyModel(d: { history: SeasonPayload['history'] }) {
   const bySeason: Record<number, { team: string; place: number; points: number }[]> = {};
   d.history.forEach(h => { (bySeason[h.season] ??= []).push(h); });
   const seasons = Object.keys(bySeason).map(Number).sort((a, b) => b - a);
