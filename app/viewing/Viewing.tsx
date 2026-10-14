@@ -13,11 +13,12 @@ import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
   tally, waitingOn, attendees, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
-  epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, addressFor, directionsUrl, placeKey,
+  epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, MAX_TIMES_PER_DAY, addressFor, directionsUrl, placeKey,
 } from '@/lib/viewingModel';
 
 const WHO_KEY = 'survivor-viewer';           // { me, also[] } — who votes on this phone
 const COMMISH_KEY = 'survivor-commish-key';  // shared with the draft room
+const CAL_KEY = 'survivor-cal-subscribed';   // this phone tapped Subscribe → the calendar box says so
 
 type Who = { me: string; also: string[] };
 type Screen = 'main' | 'who' | 'start' | 'reopen' | 'add';
@@ -194,6 +195,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
             onReopen={() => setScreen('reopen')} onAdd={() => (who ? setScreen('add') : setScreen('who'))} onStart={() => (who ? setScreen('start') : setScreen('who'))} />}
           {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} addresses={st.addresses ?? {}} people={people} canLock={canLock} busy={busy} act={act}
             onWho={() => setScreen('who')} />}
+          {v?.status !== 'locked' && <CalendarFooter />}
           {who && (
             <p className="note" style={{ textAlign: 'center' }}>
               This phone votes for <b style={{ color: 'var(--text)' }}>{people.join(' + ')}</b> · <button type="button" className="linkbtn" onClick={() => setScreen('who')}>Change</button>
@@ -446,6 +448,7 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
   const [editPlace, setEditPlace] = useState(false);
   const [time, setTime] = useState<string | null>('19:00');
   const [cant, setCant] = useState(false);
+  const [cal, setCal] = useState(false);
   const [showWho, setShowWho] = useState(false);
   const [moving, setMoving] = useState(false);
   const [newDate, setNewDate] = useState(date);
@@ -542,9 +545,10 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
       )}
 
       <div className="row2" style={{ marginTop: 14 }}>
-        <a className="cta sm" href="/api/viewing/ics">Add to calendar</a>
-        <button type="button" className="ghost" aria-expanded={cant} onClick={() => (people.length ? setCant(x => !x) : onWho())}>Can’t make it</button>
+        <button type="button" className="cta sm" aria-expanded={cal} onClick={() => { setCal(x => !x); setCant(false); }}>Add to calendar</button>
+        <button type="button" className="ghost" aria-expanded={cant} onClick={() => { setCal(false); people.length ? setCant(x => !x) : onWho(); }}>Can’t make it</button>
       </div>
+      {cal && <CalendarBox oneOff />}
       {cant && (
         <div className="box" style={{ background: 'var(--sunk)', border: '1px solid var(--line)' }}>
           <div className="t">Who can’t make it anymore?</div>
@@ -560,6 +564,47 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
       )}
     </section>
     {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm(`Cancel ${dayLabel(date)} for everyone?`)) act('cancel', {}, 'Cancelled — everyone just got a ping.'); }}>Cancel this viewing</button>}
+  </>);
+}
+
+/* ── calendar: subscribe once (updates itself) or just this night ──────── */
+
+function useCalLinks() {
+  const [env, setEnv] = useState({ host: 'survivor-dash.vercel.app', apple: true, subscribed: false });
+  useEffect(() => {
+    setEnv({ host: window.location.host, apple: /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent), subscribed: ls.get(CAL_KEY) === '1' });
+  }, []);
+  const webcal = `webcal://${env.host}/calendar.ics`;
+  const google = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+  const mark = () => { ls.set(CAL_KEY, '1'); setEnv(e => ({ ...e, subscribed: true })); };
+  return { ...env, webcal, google, mark };
+}
+
+function CalendarBox({ oneOff }: { oneOff?: boolean }) {
+  const c = useCalLinks();
+  const [primary, other] = c.apple
+    ? [{ href: c.webcal, label: 'Subscribe in Calendar' }, { href: c.google, label: 'Google instead' }]
+    : [{ href: c.google, label: 'Subscribe in Google Calendar' }, { href: c.webcal, label: 'Apple / Outlook' }];
+  return (
+    <div className="box" style={{ background: 'var(--sunk)', border: '1px solid var(--line)' }}>
+      <div className="t">{c.subscribed ? 'You’re subscribed on this phone' : 'Subscribe once — it keeps itself up to date'}</div>
+      <div className="s">Every viewing night lands in your calendar on its own. If a night moves, gets a time or a place, or is cancelled, your calendar updates — nothing to delete or re-add.{c.apple ? '' : ' Google checks for changes every few hours.'}</div>
+      <div className="row2" style={{ marginTop: 12 }}>
+        <a className="cta sm" href={primary.href} target="_blank" rel="noreferrer" onClick={c.mark}>{c.subscribed ? 'Subscribe again' : primary.label}</a>
+        <a className="ghost" href={other.href} target="_blank" rel="noreferrer" onClick={c.mark} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>{other.label}</a>
+      </div>
+      {oneOff && <a className="linkbtn" style={{ display: 'inline-block', marginTop: 8 }} href="/api/viewing/ics">Just this night (won’t update)</a>}
+    </div>
+  );
+}
+
+function CalendarFooter() {
+  const [open, setOpen] = useState(false);
+  return (<>
+    <p className="note" style={{ textAlign: 'center' }}>
+      📅 Get every viewing night in your calendar · <button type="button" className="linkbtn" aria-expanded={open} onClick={() => setOpen(x => !x)}>{open ? 'Hide' : 'Subscribe'}</button>
+    </p>
+    {open && <CalendarBox />}
   </>);
 }
 
@@ -591,21 +636,22 @@ function PollForm({ mode, busy, existing, episodes, onSubmit }: {
 
   const toggleDay = (d: string) => setSel(s => { const n = { ...s }; if (n[d]) delete n[d]; else n[d] = ['19:00']; return n; });
   const setTime = (d: string, i: number, t: string | null) => setSel(s => ({ ...s, [d]: s[d].map((x, j) => (j === i ? t : x)) }));
-  const addTime = (d: string) => setSel(s => ({ ...s, [d]: [...s[d], s[d][0] && s[d][0]! >= '17:00' ? '14:00' : '19:00'] }));
+  // next time on a day: the first usual start time not already on it
+  const addTime = (d: string) => setSel(s => ({ ...s, [d]: [...s[d], ['19:00', '14:00', '17:00', '20:00', '12:00', ...TIMES].find(t => !s[d].includes(t)) ?? '19:00'] }));
   const rmTime = (d: string, i: number) => setSel(s => ({ ...s, [d]: s[d].filter((_, j) => j !== i) }));
-  const dupes = picked.some(d => sel[d].length === 2 && sel[d][0] === sel[d][1]);
+  const dupes = picked.some(d => new Set(sel[d]).size !== sel[d].length);
 
   return (<>
     <div>
       <h2 className="title" style={{ marginTop: 4 }}>{mode === 'start' ? 'Which nights could work?' : 'Add more nights'}</h2>
-      <p className="lede">Tap the days. Each one can have a start time, two times, or “Time TBD”. Where gets decided once a night locks.</p>
+      <p className="lede">Tap the days. Each one can have one or more start times (up to {MAX_TIMES_PER_DAY}), or “Time TBD”. Where gets decided once a night locks.</p>
     </div>
 
     {mode === 'start' && <Stepper label="Episodes to watch" value={eps} onChange={setEps} />}
     {mode === 'start' && <p className="note" style={{ marginTop: -6 }}>A starting guess — it can be changed when the night locks.</p>}
 
     <section className="card" aria-label="Pick days">
-      <div className="hrow"><h3 className="eyebrow">Days</h3><span className="note num">{picked.length} days · {options.length} options</span></div>
+      <div className="hrow"><h3 className="eyebrow">Days</h3><span className="note num">{picked.length} day{picked.length === 1 ? '' : 's'} · {options.length} option{options.length === 1 ? '' : 's'}</span></div>
       <div className="cal" style={{ marginTop: 12 }}>
         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((x, i) => <span key={i} className="h" aria-hidden>{x}</span>)}
         {days.map((d, i) => {
@@ -638,12 +684,12 @@ function PollForm({ mode, busy, existing, episodes, onSubmit }: {
                   {sel[d].length > 1 && <button type="button" className="x" aria-label={`Remove ${timeLabel(t)} on ${dayLabel(d)}`} onClick={() => rmTime(d, i)}>×</button>}
                 </span>
               ))}
-              {sel[d].length < 2 && sel[d][0] !== null && <button type="button" className="chipbtn" style={{ borderStyle: 'dashed' }} onClick={() => addTime(d)}>+ time</button>}
+              {sel[d].length < MAX_TIMES_PER_DAY && sel[d][0] !== null && <button type="button" className="chipbtn" style={{ borderStyle: 'dashed' }} onClick={() => addTime(d)}>+ time</button>}
               </div>
             </div>
           ))}
         </div>
-        {dupes && <p className="note" style={{ color: 'var(--neg)' }}>Two of the same time on one day — change or remove one.</p>}
+        {dupes && <p className="note" style={{ color: 'var(--neg)' }}>The same time is on one day twice — change or remove one.</p>}
       </section>
     )}
 
