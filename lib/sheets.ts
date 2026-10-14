@@ -230,15 +230,18 @@ export interface RegistryRow {
   num_weeks: number;
   urls: { episodes: string; contestants: string; leaderboard: string; scoring?: string; draft?: string };
   teams: string[]; // optional Teams column (pipe-separated), used by the draft room
+  voters: string[]; // optional Voters column (pipe-separated): who votes on viewing nights
 }
 
 /**
  * The "Seasons" control tab — the app's index of which seasons exist.
  * Columns (found by header, any order): Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL |
- * Scoring URL | Draft URL | Weeks | Teams
+ * Scoring URL | Draft URL | Weeks | Teams | Voters
  * - Status: "active" (normal dashboard), "final" (season over), or "drafting" (show the draft room).
  * - Teams (optional): the league's teams pipe-separated, e.g. "Kenny + Lena|Tony + Karina|Megan + Jake|Will + Kathleen + Anna".
  *   Used by the draft room; if blank it falls back to the distinct teams found in the Contestants tab.
+ * - Voters (optional): who votes on viewing nights, pipe-separated first names, e.g.
+ *   "Kenny|Lena|Tony|Karina|Megan|Jake|Will|Kathleen". Blank = everyone named in the team names.
  * - Draft URL (optional): only needed if a season's Draft tab can't be found by name in its
  *   published workbook (see findPublishedTab).
  * Add a row to create a season; set Status to "final" to end it.
@@ -252,6 +255,7 @@ export function parseRegistry(rows: string[][]): RegistryRow[] {
     season: col(/^season$/, 0), name: col(/^name$/, 1), status: col(/^status$/, 2),
     episodes: col(/^episodes?\b/, 3), contestants: col(/^contestants?\b/, 4), leaderboard: col(/^leaderboard\b/, 5),
     scoring: col(/^scoring\b/, 6), weeks: col(/^weeks?$/, 7), teams: col(/^teams?$/, 8), draft: col(/^draft\b/, -1),
+    voters: col(/^voters?$/, -1),
   };
   const cell = (r: string[], i: number) => (i >= 0 ? (r[i] || '').trim() : '');
   return rows.slice(1)
@@ -270,6 +274,7 @@ export function parseRegistry(rows: string[][]): RegistryRow[] {
         },
         num_weeks: cell(r, C.weeks) ? num(cell(r, C.weeks)) : 14,
         teams: cell(r, C.teams).split('|').map(x => x.trim()).filter(Boolean),
+        voters: cell(r, C.voters).split('|').map(x => x.trim()).filter(Boolean),
       };
     });
 }
