@@ -6,7 +6,7 @@
 // Night Scheduler" canvas.
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePullRefresh } from '../PullToRefresh';
 import PushToggle from '../s/[season]/PushToggle';
 import { colorFor } from '../s/[season]/dash/model';
@@ -25,6 +25,7 @@ type Screen = 'main' | 'who' | 'start' | 'reopen' | 'add';
 const ls = {
   get(k: string) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+  del(k: string) { try { localStorage.removeItem(k); } catch { /* private mode */ } },
 };
 
 // 11:00 AM … 10:00 PM in half hours
@@ -71,6 +72,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [keyBox, setKeyBox] = useState(false);   // hidden commissioner-key field (5 quick taps on the title)
+  const taps = useRef<number[]>([]);
 
   // who's on this phone + commissioner key (shared with the draft room; ?key= saves it)
   useEffect(() => {
@@ -132,6 +135,24 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
 
   const saveWho = (w: Who) => { setWho(w); ls.set(WHO_KEY, JSON.stringify(w)); setScreen('main'); };
 
+  // 5 taps on the title within 2s opens the commissioner-key field — nothing visible for anyone else
+  const tapTitle = () => {
+    if (screen !== 'main') return;
+    const now = Date.now();
+    taps.current = [...taps.current.filter(t => now - t < 2000), now];
+    if (taps.current.length >= 5) { taps.current = []; setKeyBox(true); }
+  };
+  const saveKey = async (k: string) => {
+    setBusy(true); setErr(null); setFlash(null);
+    try {
+      const r = await fetch('/api/viewing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkkey', key: k }) });
+      if (!r.ok) { setErr('That key didn’t work.'); return; }
+      ls.set(COMMISH_KEY, k); setKey(k); setKeyBox(false); setFlash('Commissioner key saved on this phone.');
+    } catch { setErr('Couldn’t reach the server — check your connection.'); }
+    finally { setBusy(false); }
+  };
+  const removeKey = () => { ls.del(COMMISH_KEY); setKey(''); setFlash('Commissioner key removed from this phone.'); };
+
   const { roster, viewing: v, votes } = st;
   const canLock = !!key || (!!v && people.includes(v.created_by));
   const back = screen === 'main' ? null : () => { setScreen('main'); setErr(null); };
@@ -142,7 +163,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {back
           ? <button type="button" className="iconbtn" aria-label="Back" onClick={back}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></button>
           : <Link className="iconbtn" href="/" aria-label="Home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></Link>}
-        <h1>{screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Next viewing'}</h1>
+        <h1 onClick={tapTitle} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>{screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Next viewing'}</h1>
         <PushToggle variant="icon" onHint={setHint} />
       </header>
       {hint && <p className="hint" role="status">{hint}</p>}
@@ -158,6 +179,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {screen === 'reopen' && v && <PollForm mode="reopen" busy={busy} existing={v.options} episodes={v.episodes}
           onSubmit={(p) => act('reopen', p, 'The poll is open again.')} />}
         {screen === 'add' && <AddDateForm busy={busy} places={st.places} onSubmit={(p) => act('add_date', p, 'Locked in — everyone just got a ping.')} />}
+
+        {screen === 'main' && keyBox && <KeyBox busy={busy} onSave={saveKey} onCancel={() => setKeyBox(false)} />}
 
         {screen === 'main' && (<>
           {!who && roster.voters.length > 0 && (
@@ -176,9 +199,32 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
               This phone votes for <b style={{ color: 'var(--text)' }}>{people.join(' + ')}</b> · <button type="button" className="linkbtn" onClick={() => setScreen('who')}>Change</button>
             </p>
           )}
+          {key && (
+            <p className="note" style={{ textAlign: 'center' }}>
+              Commissioner ✓ · <button type="button" className="linkbtn" onClick={removeKey}>Remove</button>
+            </p>
+          )}
         </>)}
       </main>
     </>
+  );
+}
+
+/* ── hidden commissioner key ────────────────────────────────────────── */
+
+function KeyBox({ busy, onSave, onCancel }: { busy: boolean; onSave: (k: string) => void; onCancel: () => void }) {
+  const [k, setK] = useState('');
+  return (
+    <section className="card hi" aria-label="Commissioner key">
+      <h2 className="eyebrow">Commissioner key</h2>
+      <p className="lede">Saved on this phone only. It lets you lock or cancel any poll.</p>
+      <input type="password" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        style={{ marginTop: 12 }} placeholder="Paste your key" aria-label="Commissioner key" value={k} onChange={e => setK(e.target.value)} />
+      <div className="row2" style={{ marginTop: 12 }}>
+        <button type="button" className="ghost" onClick={onCancel}>Cancel</button>
+        <button type="button" className="cta sm" disabled={busy || !k.trim()} onClick={() => onSave(k.trim())}>Save</button>
+      </div>
+    </section>
   );
 }
 
