@@ -126,7 +126,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         body: JSON.stringify({ action, me: who?.me, as: people, key: key || undefined, ...extra }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) { setErr(j.error || 'Something went wrong — try again.'); if (r.status === 409) load(); return false; }
+      if (!r.ok) { setErr(j.error || 'Something went wrong — try again.'); if (r.status === 409) load(); window.scrollTo({ top: 0, behavior: 'smooth' }); return false; }
       setSt(j); setScreen('main'); if (done) setFlash(done);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return true;
@@ -134,7 +134,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
     finally { setBusy(false); }
   }, [who, people, key, load]);
 
-  const saveWho = (w: Who) => { setWho(w); ls.set(WHO_KEY, JSON.stringify(w)); setScreen('main'); };
+  const rememberWho = (w: Who) => { setWho(w); ls.set(WHO_KEY, JSON.stringify(w)); };
+  const saveWho = (w: Who) => { rememberWho(w); setScreen('main'); };
 
   // 5 taps on the title within 2s opens the commissioner-key field — nothing visible for anyone else
   const tapTitle = () => {
@@ -175,11 +176,12 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {!st.configured && <div className="err">The scheduler isn’t connected yet.</div>}
 
         {screen === 'who' && <WhoPicker roster={roster} who={who} onSave={saveWho} />}
-        {screen === 'start' && <PollForm mode="start" busy={busy} existing={[]} episodes={2}
+        {(screen === 'start' || screen === 'add') && <WhoInline roster={roster} who={who} onPick={rememberWho} verb={screen === 'start' ? 'starting this poll' : 'adding the date'} />}
+        {screen === 'start' && <PollForm mode="start" busy={busy} existing={[]} episodes={2} needWho={!who}
           onSubmit={(p) => act('start', p, 'The poll is live — everyone just got a ping.')} />}
         {screen === 'reopen' && v && <PollForm mode="reopen" busy={busy} existing={v.options} episodes={v.episodes}
           onSubmit={(p) => act('reopen', p, 'The poll is open again.')} />}
-        {screen === 'add' && <AddDateForm busy={busy} places={st.places} onSubmit={(p) => act('add_date', p, 'Locked in — everyone just got a ping.')} />}
+        {screen === 'add' && <AddDateForm busy={busy} places={st.places} needWho={!who} onSubmit={(p) => act('add_date', p, 'Locked in — everyone just got a ping.')} />}
 
         {screen === 'main' && keyBox && <KeyBox busy={busy} onSave={saveKey} onCancel={() => setKeyBox(false)} />}
 
@@ -209,6 +211,35 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         </>)}
       </main>
     </>
+  );
+}
+
+/* ── who's starting this (shown on Start a poll / Add the date) ─────────── */
+
+// Links like the homepage's "Start a poll" land straight on the form, so the name is asked right here —
+// one tap, no detour, and nothing typed into the form is lost. Couples can add their partner later
+// ("This phone votes for … · Change").
+function WhoInline({ roster, who, onPick, verb }: { roster: Roster; who: Who | null; onPick: (w: Who) => void; verb: string }) {
+  const [editing, setEditing] = useState(false);
+  if (!roster.voters.length) return null;
+  if (who && !editing) return (
+    <div className="who"><span className="t">You’re {verb} as <b>{[who.me, ...who.also].join(' + ')}</b></span>
+      <button type="button" className="chipbtn" onClick={() => setEditing(true)}>Not you?</button></div>
+  );
+  return (
+    <section className="card hi" aria-label="Who are you?">
+      <h2 className="eyebrow">Step 1</h2>
+      <h2 className="title" style={{ fontSize: 20 }}>Who are you?</h2>
+      <p className="lede">Tap your name — this phone remembers it.</p>
+      <div className="chips" style={{ marginTop: 12 }}>
+        {roster.voters.map(v => (
+          <button key={v.name} type="button" className="tog" aria-pressed={who?.me === v.name}
+            onClick={() => { onPick({ me: v.name, also: who?.me === v.name ? who.also : [] }); setEditing(false); }}>
+            <span className="dots" aria-hidden><i style={{ background: colorFor(v.team, roster.teams.indexOf(v.team)), borderColor: colorFor(v.team, roster.teams.indexOf(v.team)) }} /></span>{v.name}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -610,8 +641,8 @@ function CalendarFooter() {
 
 /* ── start a poll / reopen ───────────────────────────────────────────── */
 
-function PollForm({ mode, busy, existing, episodes, onSubmit }: {
-  mode: 'start' | 'reopen'; busy: boolean; existing: ViewingOption[]; episodes: number;
+function PollForm({ mode, busy, existing, episodes, needWho, onSubmit }: {
+  mode: 'start' | 'reopen'; busy: boolean; existing: ViewingOption[]; episodes: number; needWho?: boolean;
   onSubmit: (p: { options: { date: string; time: string | null }[]; deadline: string; episodes: number }) => void;
 }) {
   const today = todayET();
@@ -709,7 +740,8 @@ function PollForm({ mode, busy, existing, episodes, onSubmit }: {
       </section>
     )}
 
-    <button type="button" className="cta" disabled={busy || !options.length || !dueDay || dupes}
+    {needWho && <p className="note" style={{ textAlign: 'center', color: 'var(--gold)' }}>Tap your name at the top first.</p>}
+    <button type="button" className="cta" disabled={busy || needWho || !options.length || !dueDay || dupes}
       onClick={() => dueDay && onSubmit({ options, deadline: dueDay, episodes: eps })}>
       {mode === 'start' ? 'Start poll · ping everyone' : 'Reopen the poll · ping everyone'}
     </button>
@@ -718,7 +750,7 @@ function PollForm({ mode, busy, existing, episodes, onSubmit }: {
 
 /* ── already decided → lock a date directly ───────────────────────────── */
 
-function AddDateForm({ busy, places, onSubmit }: { busy: boolean; places: string[]; onSubmit: (p: { date: string; time: string | null; place: string | null; episodes: number }) => void }) {
+function AddDateForm({ busy, places, needWho, onSubmit }: { busy: boolean; places: string[]; needWho?: boolean; onSubmit: (p: { date: string; time: string | null; place: string | null; episodes: number }) => void }) {
   const today = todayET();
   const [date, setDate] = useState(addDays(today, 1));
   const [time, setTime] = useState<string | null>('19:00');
@@ -748,7 +780,8 @@ function AddDateForm({ busy, places, onSubmit }: { busy: boolean; places: string
       </div>
       <Stepper label="Episodes to watch" value={eps} onChange={setEps} />
     </section>
-    <button type="button" className="cta" disabled={busy || !date || (isOther && !other.trim())}
+    {needWho && <p className="note" style={{ textAlign: 'center', color: 'var(--gold)' }}>Tap your name at the top first.</p>}
+    <button type="button" className="cta" disabled={busy || needWho || !date || (isOther && !other.trim())}
       onClick={() => onSubmit({ date, time, place: isOther ? other.trim() : place, episodes: eps })}>Lock it in · ping everyone</button>
   </>);
 }
