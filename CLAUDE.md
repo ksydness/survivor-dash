@@ -242,17 +242,31 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   can lock any option early, and cancel. In the home-screen app (no address bar, storage separate from
   Safari) the key is entered via a hidden field: tap the "Next viewing" title 5× within 2s → paste → checked
   server-side (action `checkkey`); that phone then shows "Commissioner ✓ · Remove".
-- **Locked**: set the time (if TBD won) and where (Kenny & Lena's / Tony & Karina's / typed — `PLACES` in
-  `lib/viewingModel.ts`), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
+- **Locked**: set the time (if TBD won) and where (quick picks from the hub workbook's **Places** tab, or
+  typed), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
   "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
   Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
   locked row in place and pings "Moved: …"; a new *day* clears drops and re-arms the morning-of reminder.
   If the new day wasn't a poll option, `attendees()` counts everyone (minus drops).
   A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
+- **Places** (2026-10-14): the hub workbook (same one as the Seasons tab) has a **Places** tab
+  (`Name | Address`), found by tab name via `findPublishedTab(SEASONS_CSV_URL, 'Places')` in
+  `getPlaces()` (`lib/data.ts`) — no registry column or env var. Its names are the "where" quick picks; the
+  locked card shows the address + **Get directions** (Apple Maps on Apple devices, Google Maps elsewhere —
+  `directionsUrl`), the "where" push and morning-of reminder include the address, and the .ics LOCATION is
+  the address. Names match loosely (`placeKey`: `&`/`+`/`and`, curly/straight apostrophes, case), so older
+  rows saved as "Tony & Karina’s" still find "Tony + Karina's". Tab missing → falls back to `PLACES`
+  (no addresses). A typed place gets a directions link from its text.
 - **Pushes** (same subscriptions as score notifications, `league = 'survivor'`; tap opens `/viewing`): poll
   started, night added, reopened, locked, moved, time/where set, someone drops, cancelled, no night cleared the bar;
-  the evening-before nudge goes only to devices whose `push_subscriptions.people` include a non-voter
-  (the page reports who's on the device via action `whoami`); 10 AM morning-of reminder.
+  10 AM morning-of reminder. **Viewing pushes only go to devices whose `push_subscriptions.people` include a
+  current voter** (`push()` in `lib/viewing.ts`); non-voters (Anna, Dan) and untagged devices get score pings
+  only. Devices get tagged two ways: right after turning notifications on, `PushToggle` shows a
+  "Who's this phone for?" sheet (everyone on the current teams, from `GET /api/push/subscribe` → `names`,
+  saved via `POST { subscription, people }`; also seeds `survivor-viewer` with the voters picked), and a
+  device already on but untagged is asked once on its next visit (Skip → `survivor-push-who-skipped`, never
+  asked again). `/viewing`'s "who's voting" picker also tags the device (action `whoami`). The evening-before
+  nudge additionally narrows to devices with a voter who hasn't voted.
 - **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
   a Supabase **pg_cron** job `survivor-viewing-tick` calls it hourly at :05 via pg_net. Every page load also
   runs the deadline check.

@@ -30,11 +30,18 @@ export function isValidSub(s: unknown): s is PushSub {
     && x.keys.p256dh.length < 200 && x.keys.auth.length < 100;
 }
 
-export async function saveSubscription(s: PushSub): Promise<void> {
-  const { error } = await db().from('push_subscriptions').upsert({
+/**
+ * Save (or refresh) a device. `people` = who uses this phone; passed only when the phone answers "who's this
+ * phone for?" — otherwise the stored names are left alone. Returns the names now on file for the device
+ * (viewing-night pings go only to devices that include a voter — see lib/viewing.ts push()).
+ */
+export async function saveSubscription(s: PushSub, people?: string[]): Promise<string[]> {
+  const { data, error } = await db().from('push_subscriptions').upsert({
     endpoint: s.endpoint, league: LEAGUE, p256dh: s.keys.p256dh, auth: s.keys.auth, updated_at: new Date().toISOString(),
-  });
+    ...(people ? { people } : {}),
+  }).select('people').single();
   if (error) throw new Error(error.message);
+  return ((data as { people: string[] | null } | null)?.people) ?? [];
 }
 
 export async function deleteSubscription(endpoint: string): Promise<void> {

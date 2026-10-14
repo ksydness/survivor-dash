@@ -9,7 +9,7 @@
 
 import {
   fetchCsv, parseRegistry, parseHistory, parseEpisodes, parseEpisodeWeeks, parseContestants,
-  parseCast, parseDraft, parseScoring, findPublishedTab, RegistryRow,
+  parseCast, parseDraft, parseScoring, parsePlaces, findPublishedTab, RegistryRow,
 } from './sheets';
 import type { SeasonPayload, Contestant, SeasonMeta, DraftData, DraftBoard, ScoringRule } from './types';
 
@@ -85,6 +85,18 @@ export async function getScoringRules(fresh = false): Promise<{ season: number; 
     } catch { /* try the next season */ }
   }
   return null;
+}
+
+/**
+ * Where viewing nights can be: the hub workbook's "Places" tab (Name | Address), found by tab name in the
+ * same published workbook as the Seasons tab. Never throws — [] when the tab is missing or unreadable
+ * (the scheduler then falls back to its built-in quick picks, without addresses).
+ */
+export async function getPlaces(fresh = false): Promise<{ name: string; address: string }[]> {
+  try {
+    const url = await findPublishedTab(SEASONS_CSV_URL(), 'Places', { fresh });
+    return url ? parsePlaces(await fetchCsv(url, { fresh })) : [];
+  } catch { return []; }
 }
 
 /** Assemble the full payload for one season by reading its sheet tabs. */

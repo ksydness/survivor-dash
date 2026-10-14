@@ -13,7 +13,7 @@ import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
   tally, waitingOn, attendees, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
-  epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES,
+  epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, addressFor, directionsUrl, placeKey,
 } from '@/lib/viewingModel';
 
 const WHO_KEY = 'survivor-viewer';           // { me, also[] } — who votes on this phone
@@ -192,7 +192,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
             busy={busy} act={act} onWho={() => setScreen('who')} />}
           {v?.status === 'closed' && <Closed v={v} votes={votes} roster={roster} bar={st.bar} canLock={canLock} busy={busy} act={act}
             onReopen={() => setScreen('reopen')} onAdd={() => (who ? setScreen('add') : setScreen('who'))} onStart={() => (who ? setScreen('start') : setScreen('who'))} />}
-          {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} people={people} canLock={canLock} busy={busy} act={act}
+          {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} addresses={st.addresses ?? {}} people={people} canLock={canLock} busy={busy} act={act}
             onWho={() => setScreen('who')} />}
           {who && (
             <p className="note" style={{ textAlign: 'center' }}>
@@ -434,8 +434,8 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
 
 /* ── locked ──────────────────────────────────────────────────────────── */
 
-function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onWho }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; places: string[]; people: string[]; canLock: boolean; busy: boolean; act: Act; onWho: () => void;
+function Locked({ v, votes, roster, bar, places, addresses, people, canLock, busy, act, onWho }: {
+  v: V; votes: Vote[]; roster: Roster; bar: number; places: string[]; addresses: Record<string, string>; people: string[]; canLock: boolean; busy: boolean; act: Act; onWho: () => void;
 }) {
   const date = v.lock_date!;
   const going = attendees(v, votes, roster);
@@ -454,7 +454,11 @@ function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onW
   const unchanged = newDate === date && newTime === v.lock_time;
   const [, m, d] = date.split('-').map(Number);
   const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  const isPreset = !!v.place && places.includes(v.place);
+  const isPreset = !!v.place && places.some(p => placeKey(p) === placeKey(v.place!));
+  const address = addressFor(v.place, addresses);
+  const [apple, setApple] = useState(true); // Apple Maps on iPhone/iPad/Mac, Google Maps elsewhere
+  useEffect(() => { setApple(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)); }, []);
+  const dest = address ?? (v.place && !isPreset ? v.place : null);
   const mine = people.filter(p => roster.voters.some(x => x.name === p));
 
   return (<>
@@ -500,7 +504,8 @@ function Locked({ v, votes, roster, bar, places, people, canLock, busy, act, onW
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flex: 'none' }}><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="t">At {v.place}</div>
-              {!isPreset && <a className="s" style={{ display: 'inline-block', textDecoration: 'underline' }} href={`https://maps.apple.com/?q=${encodeURIComponent(v.place)}`} target="_blank" rel="noreferrer">Open in Maps</a>}
+              {address && <div className="s" style={{ overflowWrap: 'anywhere' }}>{address}</div>}
+              {dest && <a className="s" style={{ display: 'inline-block', textDecoration: 'underline', color: 'var(--accent)', fontWeight: 700, marginTop: 2 }} href={directionsUrl(dest, apple)} target="_blank" rel="noreferrer">Get directions</a>}
             </div>
             <button type="button" className="chipbtn" onClick={() => setEditPlace(true)}>Change</button>
           </div>
