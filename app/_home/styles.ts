@@ -10,7 +10,11 @@ export const HOME_CSS = `
 .home .bar .torch{font-size:20px;line-height:1}
 .home .bar h1{flex:1;margin:0;font-size:19px;font-weight:800;letter-spacing:-.02em;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .home .iconbtn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:999px;color:var(--soft)}
+.home .iconbtn{background:none;border:0;cursor:pointer}
 .home .iconbtn:hover{background:var(--panel)}
+.home .iconbtn:disabled{opacity:.5;cursor:default}
+.home .iconbtn.on{color:var(--accent)}
+.home .hint{margin:8px auto 0;max-width:420px;font-size:12px;color:var(--muted);line-height:1.45;text-align:center;padding:0 16px}
 .home main{padding:16px 16px 0;display:flex;flex-direction:column;gap:16px}
 .home .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 16px 16px}
 .home .eyebrow{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
@@ -51,12 +55,14 @@ export const HOME_CSS = `
 .home .after{margin:14px 0 0;font-size:14px;line-height:1.5;color:var(--soft);padding:0 2px}
 .home .facts{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:8px;padding:0 2px;font-size:13px;color:var(--muted)}
 .home .facts b{color:var(--text)}
-.home .notify{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 14px 16px}
+.home .notify{display:flex;align-items:flex-start;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 10px 14px 16px}
 .home .notify .bell{flex:none;width:40px;height:40px;border-radius:12px;background:var(--panel2);display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .home .notify .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .home .notify .txt b{font-size:15px}
 .home .notify .txt span{font-size:13px;color:var(--muted);line-height:1.4}
-.home .notify button{flex:none;height:44px;padding:0 16px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:1px solid transparent}
+.home .notify .txt button{align-self:flex-start;height:40px;margin-top:10px;padding:0 18px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:1px solid transparent}
+.home .notify button.x{flex:none;width:36px;height:36px;margin:-6px 0 0;display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;background:none;color:var(--faint);cursor:pointer}
+.home .notify button.x:hover{background:var(--panel2);color:var(--soft)}
 .home .notify button.go{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#1c1917}
 .home .notify button.off{background:var(--panel2);border-color:var(--line);color:var(--soft)}
 .home .notify button:disabled{opacity:.6;cursor:default}

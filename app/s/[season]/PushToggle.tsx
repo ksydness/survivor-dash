@@ -9,6 +9,11 @@ import { VAPID_PUBLIC_KEY, PUSH_BRAND } from '@/lib/pushConfig';
 
 type State = 'loading' | 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on' | 'busy';
 
+// several toggles can share a page (homepage card + top-bar bell): each one announces its settled
+// state so the others follow without a reload
+const SYNC = 'survivor-push-state';
+const CARD_DISMISSED = 'survivor-notify-card-dismissed';
+
 function keyBytes(b64: string): Uint8Array<ArrayBuffer> {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -23,12 +28,30 @@ const post = (method: 'POST' | 'DELETE', body: unknown) =>
 /**
  * variant "pill" (default) = the original text pill; "icon" = a 44px bell icon button for the
  * compact app bar, which hands its hint text to the parent via onHint so it can show it below the bar;
- * "card" = the homepage's notify card (hidden, like the others, when push isn't available).
+ * "card" = the homepage's notify card (hidden, like the others, when push isn't available). The card
+ * only nudges people who haven't turned notifications on: it hides once they're on (after a one-visit
+ * "You're set"), when the browser has blocked them, or for good on that device after its ×.
  */
 export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pill' | 'icon' | 'card'; onHint?: (hint: string | null) => void } = {}) {
   const [state, setState] = useState<State>('loading');
   const [hint, setHint] = useState<string | null>(null);
+  const [justOn, setJustOn] = useState(false);       // turned on during this visit → show "You're set" once
+  const [dismissed, setDismissed] = useState(false); // card closed with its × on this device
   useEffect(() => { onHint?.(hint); /* eslint-disable-next-line */ }, [hint]);
+
+  useEffect(() => {
+    if (variant === 'card') { try { setDismissed(localStorage.getItem(CARD_DISMISSED) === '1'); } catch { /* private mode */ } }
+    const follow = (e: Event) => {
+      const next = (e as CustomEvent<State>).detail;
+      setState(cur => (cur === next || cur === 'loading' || cur === 'unsupported' ? cur : next));
+    };
+    window.addEventListener(SYNC, follow);
+    return () => window.removeEventListener(SYNC, follow);
+    /* eslint-disable-next-line */
+  }, []);
+  useEffect(() => {
+    if (state === 'on' || state === 'off' || state === 'denied') window.dispatchEvent(new CustomEvent(SYNC, { detail: state }));
+  }, [state]);
 
   useEffect(() => {
     (async () => {
@@ -63,6 +86,7 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
       const res = await post('POST', { subscription: sub.toJSON() });
       if (!res.ok) throw new Error();
       setState('on');
+      setJustOn(true);
       setHint('You’ll get a notification when each week’s scores are posted.');
     } catch { setState('off'); setHint('Couldn’t turn on notifications — try again.'); }
   }
@@ -91,11 +115,12 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
   // homepage card (styled by the homepage's .notify rules): bell, one-line pitch, a real button
   if (variant === 'card') {
     const on = state === 'on';
+    if (dismissed || state === 'denied' || (on && !justOn)) return null;
+    const dismiss = () => { setDismissed(true); try { localStorage.setItem(CARD_DISMISSED, '1'); } catch { /* private mode */ } };
     const sub = hint
       ?? (on ? 'This phone gets a notification when each week’s scores are posted.'
         : state === 'ios-install' ? 'On iPhone, add this site to your Home Screen first (Share → Add to Home Screen), then open it from there.'
-          : state === 'denied' ? 'Notifications are blocked for this site — allow them in your phone or browser settings, then reload.'
-            : 'One notification a week, when the new scores are in.');
+          : 'One notification a week, when the new scores are in.');
     const canTap = on || state === 'off' || state === 'busy';
     return (
       <section className="notify" aria-label="Score notifications">
@@ -107,12 +132,15 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
         <div className="txt">
           <b>{on ? 'You’re set' : 'Get a ping when scores post'}</b>
           <span aria-live="polite">{sub}</span>
+          {canTap && (
+            <button type="button" className={on ? 'off' : 'go'} onClick={onClick} disabled={state === 'busy'} aria-pressed={on}>
+              {state === 'busy' ? '…' : on ? 'Turn off' : 'Notify me'}
+            </button>
+          )}
         </div>
-        {canTap && (
-          <button type="button" className={on ? 'off' : 'go'} onClick={onClick} disabled={state === 'busy'} aria-pressed={on}>
-            {state === 'busy' ? '…' : on ? 'Turn off' : 'Notify me'}
-          </button>
-        )}
+        <button type="button" className="x" onClick={dismiss} aria-label={on ? 'Close' : 'Not now — hide this card'} title={on ? 'Close' : 'Not now'}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
       </section>
     );
   }

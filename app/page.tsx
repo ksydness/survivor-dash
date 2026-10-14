@@ -6,6 +6,7 @@ import type { SeasonPayload } from '@/lib/types';
 import { colorFor, fmtDelta, historyModel, latestWeek, recap, standings, weekLabel, r2 } from './s/[season]/dash/model';
 import PushToggle from './s/[season]/PushToggle';
 import DraftRefresh from './_home/DraftRefresh';
+import HomeBar from './_home/HomeBar';
 import { HOME_CSS } from './_home/styles';
 
 export const dynamic = 'force-dynamic';
@@ -68,15 +69,7 @@ export default async function Home() {
   return (
     <div className="home">
       <style dangerouslySetInnerHTML={{ __html: HOME_CSS }} />
-      <header className="bar">
-        <span className="torch" aria-hidden>🔥</span>
-        <h1>Fantasy Survivor</h1>
-        <Link className="iconbtn" href="/scoring" aria-label="How scoring works" title="How scoring works">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z" /><path d="M8 9h8M8 13h8M8 17h5" />
-          </svg>
-        </Link>
-      </header>
+      <HomeBar />
 
       <main>
         {err && <p className="msg err">{err}</p>}
