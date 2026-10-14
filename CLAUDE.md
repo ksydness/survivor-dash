@@ -58,12 +58,15 @@ The app is driven by a **Seasons control tab** so all commissioner actions happe
 (never in code or a separate admin tool). One-time setup: publish that tab to web as CSV and set
 `SEASONS_CSV_URL`.
 
-**Seasons tab** columns: `Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks | Teams`
+**Seasons tab** columns (found by header): `Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Draft URL | Weeks | Teams | Voters`
 
 - `Status` is one of: `drafting` (show the draft room), `active` (normal dashboard), `final` (over).
 - `Teams` (optional, last column): the league's teams pipe-separated, e.g.
   `Kenny + Lena|Tony + Karina|Megan + Jake|Will + Kathleen + Anna`. Used by the draft room; if blank
   it falls back to the distinct teams already in the Contestants tab.
+- `Voters` (optional): who votes on viewing nights, pipe-separated first names, e.g.
+  `Kenny|Lena|Tony|Karina|Megan|Jake|Will|Kathleen` (Colt, Anna and Dan don't vote). The newest row
+  that has it wins; blank everywhere = every first name in the current season's team names.
 
 - **Start a new season**: copy last season's sheet (keeps Apps Script + Scoring + Input), run the
   draft, fill the **Contestants** tab (name + team), publish the new sheet's tabs to web as CSV,
@@ -220,6 +223,46 @@ tab gets install instructions instead. The button hides itself until `VAPID_PRIV
   `public/sw.js` (push + click only, no offline cache). Identical in both repos apart from
   `pushConfig.ts`; both use the same VAPID key pair.
 
+## Viewing nights (`/viewing`, 2026-10-13)
+
+Schedules the league's watch nights (every ~2 weeks, usually 2 episodes) instead of group-text polls.
+Design reference: the "Survivor Dash — Viewing Night Scheduler" canvas. Scoring and the sheet are untouched —
+the sheet only supplies the roster (current season's `Teams` + the `Voters` column).
+
+- **Who**: each phone picks "who are you" + anyone it votes for (couples) — `localStorage`
+  `survivor-viewer` = `{ me, also[] }`. A vote someone casts for themselves always beats one cast for them
+  (`cast_by`); results show "by Kenny". Honor system, like the draft room.
+- **Poll**: anyone starts one (one open at a time; a closed one is superseded). Each day = one time, two
+  times (two options) or Time TBD. Yes / Maybe / No per option. A team is "in" if anyone on it says Yes;
+  bar = 3 of 4 teams (`barFor`). Best = most teams → most Yes → earliest. Votes due 9 PM ET on a day before
+  the first night.
+- **Locking**: auto at the deadline or the moment every voter has answered every option (if the best
+  clears the bar; else status `closed` → "Lock anyway" / add nights & reopen / add a date). The poll
+  starter or the commissioner (`survivor-commish-key`, shared with the draft room; `/viewing?key=…` saves it)
+  can lock any option early, and cancel.
+- **Locked**: set the time (if TBD won) and where (Kenny & Lena's / Tony & Karina's / typed — `PLACES` in
+  `lib/viewingModel.ts`), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
+  "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
+  A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
+- **Pushes** (same subscriptions as score notifications, `league = 'survivor'`; tap opens `/viewing`): poll
+  started, night added, reopened, locked, time/where set, someone drops, cancelled, no night cleared the bar;
+  the evening-before nudge goes only to devices whose `push_subscriptions.people` include a non-voter
+  (the page reports who's on the device via action `whoami`); 10 AM morning-of reminder.
+- **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
+  a Supabase **pg_cron** job `survivor-viewing-tick` calls it hourly at :05 via pg_net. Every page load also
+  runs the deadline check.
+- **Storage**: `viewings` (one row per poll/night: status `polling|locked|closed|cancelled|superseded`,
+  options jsonb, lock_date/lock_time, place, drops, episodes, nudged_at/reminded_at, optimistic `version`)
+  and `viewing_votes` (viewing_id, option_id, person, answer y/m/n, cast_by) in **bakeoff-drafts**, RLS on,
+  no policies (service role only). Preview deployments have no service key today, so `/viewing` there
+  says "not connected"; if one is ever added, previews use league `survivor-preview` and never send pushes.
+- Files: `lib/viewingModel.ts` (types, Eastern-time helpers, tally — shared with the client),
+  `lib/viewing.ts` (store, roster, actions, pushes, tick), `app/api/viewing/{route,tick/route,ics/route}.ts`,
+  `app/viewing/{page,Viewing,styles}.tsx|ts`, homepage card `app/_home/ViewingCard.tsx` (below the season
+  card so "Open Season N" stays above the fold).
+- Local dev without the service key: `VIEWING_DEV_MEMORY=1 npx next dev` uses an in-memory store
+  (never in production).
+
 ## Environment variables (set in Vercel dashboard)
 
 | Variable | Description |
@@ -261,8 +304,8 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
   only reimplements that file; `SeasonPayload`, the API routes, and the dashboard don't change.
 - **`.npmrc` with `legacy-peer-deps=true`** — required for Vercel to resolve the Next 15 / React 19
   peer-dep conflict (same as geosports).
-- **No cron.** Reads are on-demand + cached, so `vercel.json` has no cron. (The parked DB path would
-  reintroduce one.)
+- **No Vercel cron.** Reads are on-demand + cached, so `vercel.json` has no cron. The viewing scheduler's
+  hourly tick runs from Supabase pg_cron instead (see Viewing nights).
 - **Team colors** are presets + a fallback palette in `dash/model.ts`; new team names render fine
   without a code change.
 
@@ -279,14 +322,16 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
 2. While a season is **drafting**, that card reads the live-draft row (`getLiveDraft`): who's on the
    clock, pick N of M, each team's picks, **Join the draft**; `_home/DraftRefresh.tsx` re-renders it
    every 15s. Falls back to a plain "Draft in progress" card if the live draft can't be read.
-3. **Notify me** card — `PushToggle variant="card"`, a nudge only for people who haven't turned
+3. **Next viewing** card (`_home/ViewingCard.tsx`, see Viewing nights) — nothing planned / poll open /
+   poll closed / locked; hidden if the scheduler can't be read.
+4. **Notify me** card — `PushToggle variant="card"`, a nudge only for people who haven't turned
    notifications on: hidden once they're on (a one-visit "You're set" right after turning on), when
    the browser has blocked them, or for good on that device after its × (`localStorage`
    `survivor-notify-card-dismissed`). The bell in the top bar (`_home/HomeBar.tsx`, `variant="icon"`)
    is always there to turn them on/off; toggles on one page stay in sync via a `survivor-push-state`
    window event.
-4. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
-5. **Past seasons** — each with its champion and winning margin from the History tab.
+5. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
+6. **Past seasons** — each with its champion and winning margin from the History tab.
 
 ## Dashboard tabs
 
