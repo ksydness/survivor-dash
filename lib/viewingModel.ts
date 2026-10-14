@@ -41,12 +41,30 @@ export interface ViewingState {
   viewing: Viewing | null;
   votes: Vote[];
   bar: number;          // teams needed for a night to lock
-  places: string[];     // quick picks for "where"
+  places: string[];     // quick picks for "where" (the sheet's Places tab, else PLACES)
+  addresses: Record<string, string>; // place name → street address, from the Places tab
   now: string;
 }
 
-/** Quick picks for where the viewing is (the two usual hosts). */
+/** Fallback quick picks for where the viewing is, used only when the sheet's Places tab can't be read. */
 export const PLACES = ['Kenny & Lena’s', 'Tony & Karina’s'];
+
+/** Compare place names loosely: "Tony & Karina’s" = "Tony + Karina's" = "tony and karina's". */
+export const placeKey = (s: string) =>
+  s.toLowerCase().replace(/[’‘`]/g, "'").replace(/\s*(?:&|\+|\band\b)\s*/g, '+').replace(/\s+/g, ' ').trim();
+
+/** Street address for a place name (loose match), or null. */
+export function addressFor(place: string | null, addresses: Record<string, string>): string | null {
+  if (!place) return null;
+  const k = placeKey(place);
+  for (const [name, addr] of Object.entries(addresses)) if (addr && placeKey(name) === k) return addr;
+  return null;
+}
+
+/** Turn-by-turn link: Apple Maps on iPhone/iPad/Mac, Google Maps everywhere else. */
+export const directionsUrl = (dest: string, apple: boolean) => apple
+  ? `https://maps.apple.com/?daddr=${encodeURIComponent(dest)}`
+  : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
 
 /** Teams needed: 3 of 4 (75%, at least 1). */
 export const barFor = (teamCount: number) => Math.max(1, Math.ceil(teamCount * 0.75));
