@@ -245,9 +245,12 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
 - **Locked**: set the time (if TBD won) and where (Kenny & Lena's / Tony & Karina's / typed — `PLACES` in
   `lib/viewingModel.ts`), episodes stepper (anyone, any time), Add to calendar (`/api/viewing/ics`),
   "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
+  Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
+  locked row in place and pings "Moved: …"; a new *day* clears drops and re-arms the morning-of reminder.
+  If the new day wasn't a poll option, `attendees()` counts everyone (minus drops).
   A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
 - **Pushes** (same subscriptions as score notifications, `league = 'survivor'`; tap opens `/viewing`): poll
-  started, night added, reopened, locked, time/where set, someone drops, cancelled, no night cleared the bar;
+  started, night added, reopened, locked, moved, time/where set, someone drops, cancelled, no night cleared the bar;
   the evening-before nudge goes only to devices whose `push_subscriptions.people` include a non-voter
   (the page reports who's on the device via action `whoami`); 10 AM morning-of reminder.
 - **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
