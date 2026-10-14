@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Analytics } from '@vercel/analytics/next';
+import PullToRefresh from './PullToRefresh';
 import './globals.css';
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://survivor-dash.vercel.app';
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         {children}
+        <PullToRefresh />
         <Analytics />
       </body>
     </html>
