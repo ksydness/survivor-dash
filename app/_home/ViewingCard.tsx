@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ViewingState } from '@/lib/viewingModel';
 import { tally, waitingOn, attendees, teamsIn, todayET, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong } from '@/lib/viewingModel';
 import { colorFor } from '../s/[season]/dash/model';
+import VoteButton from './VoteButton';
 
 /** Homepage "Next viewing" card: nothing planned / poll open / no night worked / locked. Details live on /viewing. */
 export default function ViewingCard({ st }: { st: ViewingState }) {
@@ -43,7 +44,7 @@ export default function ViewingCard({ st }: { st: ViewingState }) {
           <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted · {v.options.length} options</span>
           {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
         </div>
-        <Link className="cta" href="/viewing">Vote</Link>
+        <VoteButton options={v.options} votes={votes} />
       </section>
     );
   }
