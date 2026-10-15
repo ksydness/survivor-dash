@@ -28,9 +28,9 @@ function vevent(v: Viewing, addresses: Record<string, string>): string[] {
   const addr = addressFor(v.place, addresses);
   return [
     'BEGIN:VEVENT', `UID:viewing-${v.id}@survivor-dash`, `SEQUENCE:${v.version}`, `DTSTAMP:${stamp(new Date())}`, ...when,
-    `SUMMARY:${esc(`Survivor viewing · ${epLabel(v.episodes)}`)}`,
+    `SUMMARY:${esc(`Survivor night · ${epLabel(v.episodes)}`)}`,
     ...(v.place ? [`LOCATION:${esc(addr ?? v.place)}`] : []),
-    `DESCRIPTION:${esc(`Fantasy Survivor viewing night${v.place ? ` at ${v.place}` : ''}${v.lock_time ? '' : ' (time TBD)'}. Details: ${SITE()}/viewing`)}`,
+    `DESCRIPTION:${esc(`Fantasy Survivor night${v.place ? ` at ${v.place}` : ''}${v.lock_time ? '' : ' (time TBD)'}. Details: ${SITE()}/viewing`)}`,
     `URL:${SITE()}/viewing`, 'END:VEVENT',
   ];
 }
@@ -39,7 +39,7 @@ function vevent(v: Viewing, addresses: Record<string, string>): string[] {
 export function buildIcs(nights: Viewing[], addresses: Record<string, string>, feed: boolean): string {
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//survivor-dash//viewing//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    ...(feed ? ['X-WR-CALNAME:Survivor viewing nights', 'X-WR-TIMEZONE:America/New_York',
+    ...(feed ? ['X-WR-CALNAME:Survivor nights', 'X-WR-TIMEZONE:America/New_York',
       'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H'] : []),
     ...nights.filter(v => v.lock_date).flatMap(v => vevent(v, addresses)),
     'END:VCALENDAR',
