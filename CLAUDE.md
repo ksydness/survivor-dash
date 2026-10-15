@@ -276,6 +276,22 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   device already on but untagged is asked once on its next visit (Skip → `survivor-push-who-skipped`, never
   asked again). `/viewing`'s "who's voting" picker also tags the device (action `whoami`). The evening-before
   nudge additionally narrows to devices with a voter who hasn't voted.
+- **Hardening after the first real poll (2026-10-14)**:
+  - "Everyone voted" = every night answered, so **Done** with skipped nights saves them as No (vote action
+    takes `option_ids[]`) — otherwise the voter stays in "Waiting on…", gets nudged, and blocks the early lock.
+  - `add_date` ("We already picked a date") can't replace an open poll unless it's the poll starter or the
+    commissioner; `/viewing?go=start|add` only opens the form when nothing is planned (else a flash says what is).
+  - Reopen drops old nights on/before the new deadline day (they'd otherwise close — and could lock — after
+    they happened); the form names them.
+  - Nudge only goes out 9 AM–9 PM ET (`NUDGE_FROM_HOUR`); a night locked/moved onto today after 10 AM is
+    marked reminded (no "Survivor tonight" an hour after "Locked").
+  - Push tags are per event (`-start`, `-locked`, `-closed`, `-reopen`, `-cancel`, …) so a later ping never
+    silently replaces an earlier one.
+  - A saved `survivor-viewer` name that's no longer a voter is dropped on load; `whoami` never untags a device
+    with an empty list. Typed places are stripped of control characters; `isYmd` rejects impossible dates.
+  - Homepage `ResumeRefresh` re-renders after ≥1 min in the background (home-screen app resumes stale pages).
+  - Not done (accepted for a friends league): anyone with the URL can act as anyone; two simultaneous "Start a
+    poll" taps can create two polls (a partial unique index would fix it).
 - **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
   a Supabase **pg_cron** job `survivor-viewing-tick` calls it hourly at :05 via pg_net. Every page load also
   runs the deadline check.

@@ -6,6 +6,7 @@ import type { SeasonPayload } from '@/lib/types';
 import { colorFor, fmtDelta, historyModel, latestWeek, recap, standings, weekLabel, r2 } from './s/[season]/dash/model';
 import PushToggle from './s/[season]/PushToggle';
 import DraftRefresh from './_home/DraftRefresh';
+import ResumeRefresh from './_home/ResumeRefresh';
 import HomeBar from './_home/HomeBar';
 import { HOME_CSS } from './_home/styles';
 import ViewingCard from './_home/ViewingCard';
@@ -77,6 +78,7 @@ export default async function Home() {
     <div className="home">
       <style dangerouslySetInnerHTML={{ __html: HOME_CSS }} />
       <HomeBar />
+      <ResumeRefresh />
 
       <main>
         {err && <p className="msg err">{err}</p>}

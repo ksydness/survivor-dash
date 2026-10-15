@@ -4,6 +4,7 @@
 export const TZ = 'America/New_York';
 export const DEADLINE_HOUR = 21;   // votes are due at 9 PM (Eastern) on the chosen day
 export const NUDGE_LEAD_H = 27;    // reminder to non-voters 27h before the deadline (≈ 6 PM the evening before)
+export const NUDGE_FROM_HOUR = 9;  // the nudge only goes out 9 AM–9 PM Eastern
 export const REMINDER_HOUR = 10;   // morning-of reminder at 10 AM
 export const MAX_EPISODES = 4;
 export const MAX_TIMES_PER_DAY = 4; // start times one poll day can offer (each is its own option)
@@ -98,7 +99,9 @@ export function addDays(ymd: string, n: number): string {
   const t = new Date(Date.UTC(y, m - 1, d + n));
   return t.toISOString().slice(0, 10);
 }
-export const isYmd = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
+// round-trips through Date so impossible days like 2026-02-30 are rejected (Date.parse would roll them over)
+export const isYmd = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s))
+  && new Date(s + 'T12:00:00Z').toISOString().slice(0, 10) === s;
 export const isHhmm = (s: unknown): s is string => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
