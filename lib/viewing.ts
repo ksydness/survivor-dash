@@ -15,7 +15,7 @@ import {
   type Answer, type Roster, type Viewing, type ViewingOption, type ViewingState, type Vote,
   PLACES, addressFor, barFor, buildRoster, tally, waitingOn, attendees, teamsIn, todayET, hourET, etToUtc,
   isYmd, isHhmm, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong, optKey,
-  DEADLINE_HOUR, NUDGE_LEAD_H, REMINDER_HOUR, MAX_EPISODES, MAX_TIMES_PER_DAY,
+  DEADLINE_HOUR, NUDGE_LEAD_H, NUDGE_FROM_HOUR, REMINDER_HOUR, MAX_EPISODES, MAX_TIMES_PER_DAY,
 } from './viewingModel';
 
 // Preview deployments get their own league so testing never touches the real poll or pings phones.
@@ -237,7 +237,7 @@ async function finalizeIfDue(row: Row, votes: Vote[], roster: Roster, force = fa
   const closed = await store().update(row.id, row.version, { status: 'closed' });
   if (closed) {
     await push({ title: `No night got ${barFor(roster.teams.length)} of ${roster.teams.length} teams`,
-      body: 'Add more nights or pick a date — or the poll starter can lock one anyway.', tag: `viewing-${row.id}` });
+      body: 'Add more nights or pick a date — or the poll starter can lock one anyway.', tag: `viewing-${row.id}-closed` });
   }
   return closed;
 }
@@ -245,6 +245,7 @@ async function finalizeIfDue(row: Row, votes: Vote[], roster: Roster, force = fa
 async function lockRow(row: Row, date: string, time: string | null, by: string, votes: Vote[], roster: Roster, episodes?: number): Promise<Row | null> {
   const locked = await store().update(row.id, row.version, {
     status: 'locked', lock_date: date, lock_time: time, locked_at: new Date().toISOString(), locked_by: by,
+    reminded_at: remindedFor(date),
     ...(episodes ? { episodes } : {}),
   });
   if (locked) {
@@ -254,7 +255,7 @@ async function lockRow(row: Row, date: string, time: string | null, by: string, 
     await push({
       title: `Locked: ${whenShort(date, time)}`,
       body: `${n} of ${roster.teams.length} teams are in · ${epLabel(locked.episodes)}.${missing ? ` Still open: ${missing} — tap to set it.` : ''}`,
-      tag: `viewing-${row.id}`,
+      tag: `viewing-${row.id}-locked`,
     });
   }
   return locked;
@@ -309,6 +310,12 @@ function needVoter(name: unknown, roster: Roster): string {
   return v.name;
 }
 
+/** Free text that ends up in pushes and the calendar feed: one line, no control characters, 80 chars max. */
+const cleanText = (s: unknown): string => (typeof s === 'string' ? s.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 80) : '');
+
+/** A night locked or moved onto today after the 10 AM reminder hour already got its ping — don't send "Survivor tonight" an hour later. */
+const remindedFor = (date: string): string | null => (date === todayET() && hourET() >= REMINDER_HOUR ? new Date().toISOString() : null);
+
 const isCommish = (key: unknown) => !!process.env.COMMISSIONER_KEY && key === process.env.COMMISSIONER_KEY;
 
 export async function act(body: ActionBody): Promise<ViewingState> {
@@ -318,7 +325,7 @@ export async function act(body: ActionBody): Promise<ViewingState> {
   const people = (Array.isArray(body.as) ? body.as : []).filter((p): p is string => typeof p === 'string' && roster.voters.some(v => v.name === p));
   const { row, votes } = await current(roster);
 
-  // a row changed under us (another phone acted at the same moment) → one quiet retry
+  // a row changed under us (another phone acted at the same moment) → ask them to try again (the page reloads)
   const save = async (patch: Partial<Row>): Promise<Row> => {
     const r = await store().update(row!.id, row!.version, patch);
     if (!r) throw new ViewingError('Someone else just changed this — try again', 409);
@@ -333,7 +340,8 @@ export async function act(body: ActionBody): Promise<ViewingState> {
     }
 
     case 'whoami': {
-      if (typeof body.endpoint === 'string' && body.endpoint.startsWith('https://')) await store().setPeople(body.endpoint, people);
+      // an empty list here means the phone sent names that aren't voters (stale/renamed) — don't untag the device
+      if (people.length && typeof body.endpoint === 'string' && body.endpoint.startsWith('https://')) await store().setPeople(body.endpoint, people);
       break;
     }
 
@@ -349,7 +357,7 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       await push({
         title: `${me} started a poll for the next viewing`,
         body: `${options.length} option${options.length === 1 ? '' : 's'}${days !== options.length ? ` over ${days} nights` : ''} · ${epLabel(created.episodes)}. Vote by ${deadlineLabel(deadline)}.`,
-        tag: `viewing-${created.id}`,
+        tag: `viewing-${created.id}-start`,
       });
       break;
     }
@@ -371,13 +379,16 @@ export async function act(body: ActionBody): Promise<ViewingState> {
     case 'vote': {
       const me = needVoter(body.me, roster);
       if (row?.status !== 'polling') throw new ViewingError('Voting is closed');
-      const opt = row.options.find(o => o.id === body.option_id);
+      const ids = Array.isArray(body.option_ids) ? body.option_ids : [body.option_id];
+      const opts = row.options.filter(o => ids.includes(o.id));
       const answer = body.answer as Answer;
-      if (!opt || !['y', 'm', 'n'].includes(answer)) throw new ViewingError('Bad vote');
+      if (!opts.length || opts.length !== ids.length || !['y', 'm', 'n'].includes(answer)) throw new ViewingError('Bad vote');
       const targets = [me, ...people.filter(p => p !== me)];
       // a vote someone cast for themselves always wins over one cast for them
-      const write = targets.filter(p => p === me || votes.find(v => v.option_id === opt.id && v.person === p)?.cast_by !== p);
-      await store().upsertVotes(row.id, write.map(p => ({ option_id: opt.id, person: p, answer, cast_by: me })));
+      const write = opts.flatMap(opt => targets
+        .filter(p => p === me || votes.find(v => v.option_id === opt.id && v.person === p)?.cast_by !== p)
+        .map(p => ({ option_id: opt.id, person: p, answer, cast_by: me })));
+      await store().upsertVotes(row.id, write);
       const fresh = await store().votes(row.id);
       await finalizeIfDue(row, fresh, roster);
       break;
@@ -403,32 +414,38 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       const fresh = kept.filter(x => !row.options.some(y => y.id === x.id));
       if (!fresh.length) throw new ViewingError('Add at least one new night');
       const deadline = deadlineFor(body.deadline, fresh);
-      await save({ status: 'polling', options: kept, deadline, nudged_at: null });
-      await push({ title: 'The viewing poll is open again', body: `New nights added. Vote by ${deadlineLabel(deadline)}.`, tag: `viewing-${row.id}` });
+      // older nights on or before the new deadline day would close (and could lock) after they've happened
+      const dueDay = todayET(new Date(deadline));
+      const open = kept.filter(x => x.date > dueDay);
+      await save({ status: 'polling', options: open, deadline, nudged_at: null });
+      await push({ title: 'The viewing poll is open again', body: `New nights added. Vote by ${deadlineLabel(deadline)}.`, tag: `viewing-${row.id}-reopen` });
       break;
     }
 
     case 'add_date': {
       const me = needVoter(body.me, roster);
       if (row?.status === 'locked') throw new ViewingError('The next viewing is already set');
+      // an open poll (with everyone's votes) is only replaced by whoever started it or the commissioner —
+      // otherwise a phone showing an old "Nothing on the calendar" page could wipe it out
+      if (row?.status === 'polling' && !canLock()) throw new ViewingError(`${row.created_by}’s poll is open — vote on it there, or ask ${row.created_by} to lock a night`, 409);
       const date = body.date; const time = body.time ?? null;
       if (!isYmd(date) || date < today) throw new ViewingError('Pick a date from today on');
       if (time !== null && !isHhmm(time)) throw new ViewingError('Bad time');
-      const place = typeof body.place === 'string' && body.place.trim() ? body.place.trim().slice(0, 80) : null;
+      const place = cleanText(body.place) || null;
       if (row) await save({ status: 'superseded' });
       const created = await store().insert({ status: 'locked', created_by: me, episodes: clampEps(body.episodes), options: [],
-        lock_date: date, lock_time: time, locked_at: new Date().toISOString(), locked_by: me, place });
+        lock_date: date, lock_time: time, locked_at: new Date().toISOString(), locked_by: me, place, reminded_at: remindedFor(date) });
       await push({
         title: `Locked: ${whenShort(date, time)}`,
         body: [place ? `At ${place}` : null, epLabel(created.episodes), !place ? 'Where is still open — tap to set it.' : null].filter(Boolean).join(' · '),
-        tag: `viewing-${created.id}`,
+        tag: `viewing-${created.id}-locked`,
       });
       break;
     }
 
     case 'set_place': {
       if (row?.status !== 'locked') throw new ViewingError('Nothing is locked yet');
-      const place = typeof body.place === 'string' ? body.place.trim().slice(0, 80) : '';
+      const place = cleanText(body.place);
       const r = await save({ place: place || null });
       if (place) {
         const addr = addressFor(place, (await placeInfo()).addresses);
@@ -456,7 +473,7 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       if (date === row.lock_date && time === row.lock_time) throw new ViewingError('That’s already the plan');
       const newDay = date !== row.lock_date;
       // a new day clears "can't make it" (it was about the old day) and re-arms the morning-of reminder
-      await save({ lock_date: date, lock_time: time, ...(newDay ? { drops: [], reminded_at: null } : {}) });
+      await save({ lock_date: date, lock_time: time, ...(newDay ? { drops: [], reminded_at: remindedFor(date) } : {}) });
       await push({
         title: `Moved: ${whenShort(date, time)}`,
         body: [`Was ${whenShort(row.lock_date, row.lock_time)}`, row.place ? `At ${row.place}` : null,
@@ -495,8 +512,8 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       if (!row) throw new ViewingError('Nothing to cancel');
       if (!canLock()) throw new ViewingError('Only whoever started it (or the commissioner) can cancel', 403);
       await save({ status: 'cancelled' });
-      if (row.status === 'locked' && row.lock_date) await push({ title: `${dayLabel(row.lock_date)} is off`, body: 'The next viewing was cancelled.', tag: `viewing-${row.id}` });
-      else await push({ title: 'The viewing poll was cancelled', body: 'Someone will start a new one.', tag: `viewing-${row.id}` });
+      if (row.status === 'locked' && row.lock_date) await push({ title: `${dayLabel(row.lock_date)} is off`, body: 'The next viewing was cancelled.', tag: `viewing-${row.id}-cancel` });
+      else await push({ title: 'The viewing poll was cancelled', body: 'Someone will start a new one.', tag: `viewing-${row.id}-cancel` });
       break;
     }
 
@@ -517,7 +534,8 @@ export async function tick(): Promise<Record<string, unknown>> {
   if (row.status === 'polling' && row.deadline && !row.nudged_at) {
     const nudgeAt = Date.parse(row.deadline) - NUDGE_LEAD_H * 3600_000;
     const startedLongAgo = now - Date.parse(row.created_at) > 6 * 3600_000; // skip for polls started late
-    if (now >= nudgeAt && startedLongAgo) {
+    const daytime = hourET() >= NUDGE_FROM_HOUR && hourET() < DEADLINE_HOUR;    // never a 4 AM "voting closes tonight"
+    if (now >= nudgeAt && startedLongAgo && daytime) {
       const r = await store().update(row.id, row.version, { nudged_at: new Date().toISOString() });
       if (r) {
         const missing = waitingOn(row.options, votes, roster);
