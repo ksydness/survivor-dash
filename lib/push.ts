@@ -7,8 +7,9 @@
 import webpush from 'web-push';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LEAGUE, SUPABASE_URL } from './draftConfig';
-import { VAPID_PUBLIC_KEY, PUSH_BRAND, PUSH_SUBJECT } from './pushConfig';
+import { VAPID_PUBLIC_KEY, PUSH_SUBJECT } from './pushConfig';
 import type { SeasonPayload } from './types';
+import { recap } from '../app/s/[season]/dash/model';
 
 export interface PushSub { endpoint: string; keys: { p256dh: string; auth: string } }
 export interface PushMessage { title: string; body: string; url: string; tag: string }
@@ -100,13 +101,16 @@ export function latestWeek(d: SeasonPayload): { index: number; label: number } |
   return { index, label: d.meta.week_labels?.[index] ?? index + 1 };
 }
 
-/** Short heads-up only — tapping opens the dashboard (Leaderboard tab, freshly synced). */
+/** "Week 3 scores are in" + the homepage's one-line recap — tapping opens the dashboard (Leaderboard tab, freshly synced). */
 export function buildScoreMessage(d: SeasonPayload): PushMessage | null {
   const lw = latestWeek(d);
   if (!lw) return null;
+  const rc = recap(d);
+  const first = rc?.body.split(/(?<=\.)\s+/)[0];
   return {
-    title: `${PUSH_BRAND.emoji} ${PUSH_BRAND.seasonLabel(d.meta.season, d.meta.name)} · Week ${lw.label} scores are in`,
-    body: 'Tap to see the leaderboard.',
+    // no emoji prefix: the notification already shows the app's 🔥 icon
+    title: `Week ${lw.label} scores are in`,
+    body: rc ? `${rc.headline}.${first ? ` ${first}` : ''}` : 'Tap to see the leaderboard.',
     url: `/s/${d.meta.season}?sync=1`,
     tag: `scores-${d.meta.season}-${lw.label}`,
   };
