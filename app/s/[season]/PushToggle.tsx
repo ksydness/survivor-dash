@@ -25,8 +25,8 @@ type League = { names: string[]; voters: string[] };
 const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 const doneHint = (people: string[], voters: string[]) => people.some(p => voters.includes(p))
-  ? 'You’ll get pings for new scores and viewing nights.'
-  : 'You’ll get pings for new scores. Viewing-night pings only go to voters.';
+  ? 'You’ll get pings for new scores and Survivor nights.'
+  : 'You’ll get pings for new scores. Survivor night pings only go to voters.';
 
 function keyBytes(b64: string): Uint8Array<ArrayBuffer> {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
@@ -161,9 +161,9 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
     if (dismissed || state === 'denied' || (on && !justOn)) return sheet;
     const dismiss = () => { setDismissed(true); try { localStorage.setItem(CARD_DISMISSED, '1'); } catch { /* private mode */ } };
     const sub = hint
-      ?? (on ? 'This phone gets pings for new scores and viewing nights.'
+      ?? (on ? 'This phone gets pings for new scores and Survivor nights.'
         : state === 'ios-install' ? 'On iPhone, add this site to your Home Screen first (Share → Add to Home Screen), then open it from there.'
-          : 'New scores each week, plus viewing-night polls and reminders.');
+          : 'New scores each week, plus Survivor night polls and reminders.');
     const canTap = on || state === 'off' || state === 'busy';
     return (<>{sheet}
       <section className="notify" aria-label="Score notifications">
@@ -173,7 +173,7 @@ export default function PushToggle({ variant = 'pill', onHint }: { variant?: 'pi
           </svg>
         </span>
         <div className="txt">
-          <b>{on ? 'You’re set' : 'Get pings for scores & viewing nights'}</b>
+          <b>{on ? 'You’re set' : 'Get pings for scores & Survivor nights'}</b>
           <span aria-live="polite">{sub}</span>
           {canTap && (
             <button type="button" className={on ? 'off' : 'go'} onClick={onClick} disabled={state === 'busy'} aria-pressed={on}>
@@ -220,7 +220,7 @@ function WhoSheet({ league, onSave, onSkip }: { league: League; onSave: (people:
         padding: '20px 16px calc(20px + env(safe-area-inset-bottom))', fontFamily: 'inherit' }}>
         <div style={{ fontSize: 19, fontWeight: 800 }}>Who’s this phone for?</div>
         <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.45, color: '#a8a29e' }}>
-          Pick everyone who uses it. Everyone gets score pings; viewing-night pings only go to voters.
+          Pick everyone who uses it. Everyone gets score pings; Survivor night pings only go to voters.
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
           {league.names.map(n => {
