@@ -12,7 +12,8 @@ import PushToggle from '../s/[season]/PushToggle';
 import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
-  tally, waitingOn, attendees, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
+  type Going,
+  tally, waitingOn, goingList, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
   epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, MAX_TIMES_PER_DAY, addressFor, directionsUrl, placeKey,
 } from '@/lib/viewingModel';
 
@@ -29,6 +30,10 @@ const ls = {
   del(k: string) { try { localStorage.removeItem(k); } catch { /* private mode */ } },
 };
 
+const and = (names: string[]) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`);
+/** Lock / pick a night for everyone — big enough to deserve an "are you sure?". */
+const sure = (what: string) => confirm(`${what}? Voting ends and everyone sees it as the plan.`);
+
 // 11:00 AM … 10:00 PM in half hours
 const TIMES = Array.from({ length: 23 }, (_, i) => { const m = 11 * 60 + i * 30; return `${String(Math.floor(m / 60)).padStart(2, '0')}:${m % 60 ? '30' : '00'}`; });
 const TBD = '';
@@ -36,11 +41,34 @@ const TBD = '';
 const Chev = () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>);
 const Check = () => (<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12l5 5L20 7" /></svg>);
 
-function Dots({ roster, inTeams }: { roster: Roster; inTeams: string[] }) {
+function Dots({ roster, inTeams, maybeTeams = [] }: { roster: Roster; inTeams: string[]; maybeTeams?: string[] }) {
   return (
-    <span className="dots" role="img" aria-label={`${inTeams.length} of ${roster.teams.length} teams in${inTeams.length ? ': ' + inTeams.join(', ') : ''}`}>
-      {roster.teams.map((t, i) => { const c = colorFor(t, i); const on = inTeams.includes(t); return <i key={t} style={on ? { background: c, borderColor: c } : undefined} />; })}
+    <span className="dots" role="img" aria-label={`${inTeams.length} of ${roster.teams.length} teams in${inTeams.length ? ': ' + inTeams.join(', ') : ''}${maybeTeams.length ? `; maybe: ${maybeTeams.join(', ')}` : ''}`}>
+      {roster.teams.map((t, i) => {
+        const c = colorFor(t, i);
+        // filled = someone on the team said Yes; half-filled = only a Maybe
+        const st = inTeams.includes(t) ? { background: c, borderColor: c } : maybeTeams.includes(t) ? { background: `linear-gradient(90deg, ${c} 50%, transparent 50%)`, borderColor: c } : undefined;
+        return <i key={t} style={st} />;
+      })}
     </span>
+  );
+}
+
+/** Small "share with the group text" link: the phone's share sheet, or copy to paste. */
+function ShareLink({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const url = `${window.location.origin}/viewing`;
+    try {
+      if (navigator.share) { await navigator.share({ text, url }); return; }
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      setCopied(true); setTimeout(() => setCopied(false), 2500);
+    } catch { /* share sheet dismissed */ }
+  };
+  return (
+    <p className="note" style={{ textAlign: 'center', margin: 0 }}>
+      <button type="button" className="linkbtn" onClick={share}>{copied ? 'Copied — paste it in the group text' : 'Share with the group text'}</button>
+    </p>
   );
 }
 
@@ -96,7 +124,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
     if (go === 'start' || go === 'add') {
       const cur = initial.viewing;
       if (!cur || cur.status === 'closed') setScreen(go);
-      else setFlash(cur.status === 'polling' ? `${cur.created_by} already started a poll — vote below.` : 'The next viewing is already set — here it is.');
+      else setFlash(cur.status === 'polling' ? `${cur.created_by} already started a poll — vote below.` : 'The next Survivor night is already set — here it is.');
     }
   }, [go]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -170,7 +198,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
   const removeKey = () => { ls.del(COMMISH_KEY); setKey(''); setFlash('Commissioner key removed from this phone.'); };
 
   const { roster, viewing: v, votes } = st;
-  const canLock = !!key || (!!v && people.includes(v.created_by));
+  // whoever started it (on their own phone — not a phone that votes for them) or the commissioner
+  const canLock = !!key || (!!v && who?.me === v.created_by);
   const back = screen === 'main' ? null : () => { setScreen('main'); setErr(null); };
 
   return (
@@ -179,7 +208,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {back
           ? <button type="button" className="iconbtn" aria-label="Back" onClick={back}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></button>
           : <Link className="iconbtn" href="/" aria-label="Home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></Link>}
-        <h1 onClick={tapTitle} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>{screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Next viewing'}</h1>
+        <h1 onClick={tapTitle} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>{screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Survivor night'}</h1>
         <PushToggle variant="icon" onHint={setHint} />
       </header>
       {hint && <p className="hint" role="status">{hint}</p>}
@@ -192,25 +221,21 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {screen === 'who' && <WhoPicker roster={roster} who={who} onSave={saveWho} />}
         {(screen === 'start' || screen === 'add') && <WhoInline roster={roster} who={who} onPick={rememberWho} verb={screen === 'start' ? 'starting this poll' : 'adding the date'} />}
         {screen === 'start' && <PollForm mode="start" busy={busy} existing={[]} episodes={2} needWho={!who}
-          onSubmit={(p) => act('start', p, 'The poll is live — everyone just got a ping. Now add your own votes below.')} />}
+          onSubmit={(p) => act('start', p, 'The poll is live. Now add your own votes below.')} />}
         {screen === 'reopen' && v && <PollForm mode="reopen" busy={busy} existing={v.options} episodes={v.episodes}
           onSubmit={(p) => act('reopen', p, 'The poll is open again.')} />}
-        {screen === 'add' && <AddDateForm busy={busy} places={st.places} needWho={!who} onSubmit={(p) => act('add_date', p, 'Locked in — everyone just got a ping.')} />}
+        {screen === 'add' && <AddDateForm busy={busy} places={st.places} needWho={!who} onSubmit={(p) => act('add_date', p, 'It’s set.')} />}
 
         {screen === 'main' && keyBox && <KeyBox busy={busy} onSave={saveKey} onCancel={() => setKeyBox(false)} />}
 
         {screen === 'main' && (<>
-          {!who && roster.voters.length > 0 && (
-            <div className="who"><span className="t">First, tell us who’s on this phone.</span>
-              <button type="button" className="chipbtn" onClick={() => setScreen('who')}>Pick</button></div>
-          )}
-          {!v && <Idle onStart={() => (who ? setScreen('start') : setScreen('who'))} onAdd={() => (who ? setScreen('add') : setScreen('who'))} />}
+          {!v && <Idle onStart={() => setScreen('start')} onAdd={() => setScreen('add')} />}
           {v?.status === 'polling' && <Polling v={v} votes={votes} roster={roster} bar={st.bar} who={who} people={people} canLock={canLock}
-            busy={busy} act={act} onWho={() => setScreen('who')} />}
+            busy={busy} act={act} onPick={rememberWho} />}
           {v?.status === 'closed' && <Closed v={v} votes={votes} roster={roster} bar={st.bar} canLock={canLock} busy={busy} act={act}
-            onReopen={() => setScreen('reopen')} onAdd={() => (who ? setScreen('add') : setScreen('who'))} onStart={() => (who ? setScreen('start') : setScreen('who'))} />}
-          {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} addresses={st.addresses ?? {}} people={people} canLock={canLock} busy={busy} act={act}
-            onWho={() => setScreen('who')} />}
+            onReopen={() => setScreen('reopen')} onAdd={() => setScreen('add')} onStart={() => setScreen('start')} />}
+          {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} addresses={st.addresses ?? {}} who={who} people={people} canLock={canLock} busy={busy} act={act}
+            onPick={rememberWho} />}
           {v?.status !== 'locked' && <CalendarFooter />}
           {who && (
             <p className="note" style={{ textAlign: 'center' }}>
@@ -235,24 +260,39 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
 // ("This phone votes for … · Change").
 function WhoInline({ roster, who, onPick, verb }: { roster: Roster; who: Who | null; onPick: (w: Who) => void; verb: string }) {
   const [editing, setEditing] = useState(false);
+  const [askMates, setAskMates] = useState<string[]>([]);   // just picked a name → "voting for Karina too?"
   if (!roster.voters.length) return null;
+  const color = (team: string) => colorFor(team, roster.teams.indexOf(team));
+  if (who && askMates.length) return (
+    <div className="who"><span className="t">Also answering for <b>{and(askMates)}</b>? Their own answers always win.</span>
+      <button type="button" className="chipbtn" onClick={() => { onPick({ me: who.me, also: askMates }); setAskMates([]); }}>Yes</button>
+      <button type="button" className="chipbtn" onClick={() => setAskMates([])}>Just me</button></div>
+  );
   if (who && !editing) return (
     <div className="who"><span className="t">You’re {verb} as <b>{[who.me, ...who.also].join(' + ')}</b></span>
       <button type="button" className="chipbtn" onClick={() => setEditing(true)}>Not you?</button></div>
   );
+  // people on the teams who don't vote (Colt, Anna, Dan) — so they know there's nothing to do
+  const others = [...new Set(roster.teams.flatMap(t => t.split(/\s*(?:\+|&|,|\band\b)\s*/i).map(x => x.trim()).filter(Boolean)))]
+    .filter(n => !roster.voters.some(v => v.name.toLowerCase() === n.toLowerCase()));
+  const pick = (name: string, team: string) => {
+    const mates = roster.voters.filter(x => x.team === team && x.name !== name).map(x => x.name);
+    onPick({ me: name, also: who?.me === name ? who.also : [] });
+    setEditing(false);
+    if (mates.length && who?.me !== name) setAskMates(mates);
+  };
   return (
     <section className="card hi" aria-label="Who are you?">
-      <h2 className="eyebrow">Step 1</h2>
       <h2 className="title" style={{ fontSize: 20 }}>Who are you?</h2>
       <p className="lede">Tap your name — this phone remembers it.</p>
       <div className="chips" style={{ marginTop: 12 }}>
         {roster.voters.map(v => (
-          <button key={v.name} type="button" className="tog" aria-pressed={who?.me === v.name}
-            onClick={() => { onPick({ me: v.name, also: who?.me === v.name ? who.also : [] }); setEditing(false); }}>
-            <span className="dots" aria-hidden><i style={{ background: colorFor(v.team, roster.teams.indexOf(v.team)), borderColor: colorFor(v.team, roster.teams.indexOf(v.team)) }} /></span>{v.name}
+          <button key={v.name} type="button" className="tog" aria-pressed={who?.me === v.name} onClick={() => pick(v.name, v.team)}>
+            <span className="dots" aria-hidden><i style={{ background: color(v.team), borderColor: color(v.team) }} /></span>{v.name}
           </button>
         ))}
       </div>
+      {others.length > 0 && <p className="note" style={{ marginTop: 10 }}>{and(others)} {others.length === 1 ? 'doesn’t' : 'don’t'} vote on Survivor nights — nothing to do here.</p>}
     </section>
   );
 }
@@ -316,7 +356,7 @@ function WhoPicker({ roster, who, onSave }: { roster: Roster; who: Who | null; o
 function Idle({ onStart, onAdd }: { onStart: () => void; onAdd: () => void }) {
   return (
     <section className="card hi">
-      <h2 className="eyebrow">Next viewing</h2>
+      <h2 className="eyebrow">Next Survivor night</h2>
       <h2 className="title">Nothing on the calendar</h2>
       <p className="lede">Anyone can get the next one going.</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
@@ -331,8 +371,8 @@ function Idle({ onStart, onAdd }: { onStart: () => void; onAdd: () => void }) {
 
 type Act = (action: string, extra?: Record<string, unknown>, done?: string) => Promise<boolean>;
 
-function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onWho: () => void;
+function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onPick }: {
+  v: V; votes: Vote[]; roster: Roster; bar: number; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
 }) {
   const t = tally(v.options, votes, roster);
   const leader = t[0];
@@ -344,14 +384,25 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
   // how far this phone's voter is: answers save as they tap — "Done" just moves them on to the results
   const answered = who ? v.options.filter(o => votes.some(x => x.option_id === o.id && x.person === who.me)).length : 0;
   const total = v.options.length;
-  const [showResults, setShowResults] = useState(() => !!who && total > 0 && answered === total);
+  // answers someone else gave for this phone's person (Tony voting for Karina) — she gets to check them first
+  const byOthers = who ? votes.filter(x => x.person === who.me && x.cast_by !== who.me && v.options.some(o => o.id === x.option_id)) : [];
+  const [showResults, setShowResults] = useState(() => !!who && total > 0 && answered === total && byOthers.length === 0);
   // someone who already answered everything comes back to the results (once, when the phone's name loads)
   const autoShown = useRef(false);
   useEffect(() => {
     if (!who || autoShown.current) return;
     autoShown.current = true;
-    if (total > 0 && answered === total) setShowResults(true);
+    if (total > 0 && answered === total && byOthers.length === 0) setShowResults(true);
   }, [who]); // eslint-disable-line react-hooks/exhaustive-deps
+  // "Looks right": re-save those answers as their own (so nobody else's tap can change them later)
+  const keepMine = async () => {
+    if (!who) return;
+    for (const a of ['y', 'm', 'n'] as Answer[]) {
+      const ids = byOthers.filter(x => x.answer === a).map(x => x.option_id);
+      if (ids.length && !(await act('vote', { option_ids: ids, answer: a, as: [who.me] }))) return;
+    }
+  };
+  const lockIt = (o: ViewingOption) => { if (sure(`Lock ${dayLabel(o.date)}${o.time ? ` at ${timeLabel(o.time)}` : ''}`)) act('lock', { option_id: o.id, episodes: eps }, `Set: ${dayLabel(o.date)}.`); };
   const toTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   // "everyone has voted" means every night answered — so finishing with skipped nights saves them as No
   // (otherwise you'd stay on "Waiting on …", get the evening-before nudge, and the poll couldn't lock early)
@@ -368,17 +419,21 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
 
   return (<>
     <section className="card hi">
-      <div className="hrow"><h2 className="eyebrow">Next viewing</h2><span className="pill"><i />Poll open</span></div>
+      <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill"><i />Poll open</span></div>
       <h2 className="title">Pick a night for the next {epLabel(v.episodes)}</h2>
       <p className="lede">{v.created_by} started it · vote by <b>{v.deadline ? deadlineLabel(v.deadline) : '—'}</b></p>
       <div className="facts">
         <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
       </div>
-      <p className="note" style={{ marginTop: 10 }}>Locks itself then — or as soon as everyone has voted — if a night has {bar} of {roster.teams.length} teams in.</p>
+      {answered === 0 && <p className="note" style={{ marginTop: 10 }}>Locks itself then — or as soon as everyone has voted — on the night with the most teams saying Yes (needs {bar} of {roster.teams.length}). Maybes break ties.</p>}
     </section>
 
-    {!who && <button type="button" className="cta" onClick={onWho}>Tell us who you are to vote</button>}
+    {(!who || !answered) && <WhoInline roster={roster} who={who} onPick={onPick} verb="voting" />}
+    {byOthers.length > 0 && (
+      <div className="who" role="status"><span className="t"><b>{and([...new Set(byOthers.map(x => x.cast_by))])}</b> answered for you — check them below and tap to change any.</span>
+        <button type="button" className="chipbtn" disabled={busy} onClick={keepMine}>Looks right</button></div>
+    )}
     {who && (
       <div className="who" role="status"><span className="t">
         {answered === 0 ? <>Tap <b>Yes</b>, <b>Maybe</b> or <b>No</b> for each night — each tap saves.</>
@@ -390,7 +445,7 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
       <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={people} me={who?.me ?? null}
         lead={leader?.option.id === row.option.id && leader.yes.length > 0} canLock={canLock} busy={busy}
         onVote={(a) => act('vote', { option_id: row.option.id, answer: a })}
-        onLock={() => act('lock', { option_id: row.option.id, episodes: eps }, `Locked ${dayLabel(row.option.date)} — everyone just got a ping.`)} />
+        onLock={() => lockIt(row.option)} />
     ))}
 
     {adding
@@ -404,18 +459,26 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
       {answered > 0 && answered < total && <p className="note" style={{ textAlign: 'center', marginTop: -4 }}>{total - answered} night{total - answered === 1 ? '' : 's'} still unanswered — finishing counts {total - answered === 1 ? 'it' : 'them'} as No, so the poll isn’t left waiting on you.</p>}
     </>)}
 
-    <section className="card">
-      <Stepper label="Episodes to watch" value={eps} disabled={busy} onChange={(n) => { setEps(n); act('set_episodes', { episodes: n }); }} />
-      {canLock && leader && (<>
-        <p className="note" style={{ marginTop: 12 }}>{people.includes(v.created_by) ? `${v.created_by} started this poll` : 'You have the commissioner key'}, so you can lock it early:</p>
-        <button type="button" className="cta sm" style={{ marginTop: 10 }} disabled={busy}
-          onClick={() => act('lock', { option_id: leader.option.id, episodes: eps }, `Locked ${dayLabel(leader.option.date)} — everyone just got a ping.`)}>
-          Lock {dayLabel(leader.option.date)}{leader.option.time ? ` · ${timeLabel(leader.option.time)}` : ''} now
-        </button>
-      </>)}
-    </section>
+    {canLock && (
+      <section className="card">
+        <Stepper label="Episodes" value={eps} disabled={busy} onChange={(n) => { setEps(n); act('set_episodes', { episodes: n }); }} />
+        {leader && (<>
+          <p className="note" style={{ marginTop: 12 }}>{who?.me === v.created_by ? 'You started this poll' : 'You have the commissioner key'}, so you can lock it early:</p>
+          <button type="button" className="ghost" style={{ marginTop: 10 }} disabled={busy} onClick={() => lockIt(leader.option)}>
+            Lock {dayLabel(leader.option.date)}{leader.option.time ? ` · ${timeLabel(leader.option.time)}` : ''} now
+          </button>
+        </>)}
+      </section>
+    )}
+    <ShareLink text={pollShareText(v)} />
     {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm('Cancel this poll for everyone?')) act('cancel', {}, 'Poll cancelled.'); }}>Cancel this poll</button>}
   </>);
+}
+
+function pollShareText(v: V) {
+  const days = [...new Set(v.options.map(o => o.date))].sort().map(dayLabel);
+  const list = days.length <= 1 ? days.join('') : `${days.slice(0, -1).join(', ')} or ${days[days.length - 1]}`;
+  return `Vote on the next Survivor night (${list})${v.deadline ? ` by ${weekdayShort(todayET(new Date(v.deadline)))} 9 PM` : ''}:`;
 }
 
 /* ── after voting: where it stands ────────────────────────────────────── */
@@ -433,7 +496,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
       <div className="hrow"><h2 className="eyebrow">Your votes are in</h2><span className="pill"><i />Poll open</span></div>
       <h2 className="title">Thanks, {me} ✓</h2>
       <p className="lede">{allIn ? 'Everyone has voted — it locks in a moment.'
-        : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. It locks itself then, or as soon as everyone has voted — everyone gets a ping.</>}</p>
+        : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. It locks itself then, or as soon as everyone has voted.</>}</p>
       <div className="facts">
         <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
@@ -455,7 +518,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
                 <span className="note">{row.yes.length} yes · {row.maybe.length} maybe · {row.no.length} no · you said <b style={{ color: 'var(--text)' }}>{mine ? word[mine] : '—'}</b></span>
               </div>
               <div style={{ textAlign: 'right', flex: 'none' }}>
-                <Dots roster={roster} inTeams={row.teamsIn} />
+                <Dots roster={roster} inTeams={row.teamsIn} maybeTeams={row.teamsMaybe} />
                 <div className="note num" style={{ color: row.clears ? 'var(--gold)' : undefined }}>{row.teamsIn.length} of {roster.teams.length}{row.clears ? ' ✓' : ''}</div>
               </div>
               <span style={{ flex: 'none', color: 'var(--muted)', display: 'flex', transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}><Chev /></span>
@@ -471,11 +534,12 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
     {answered < v.options.length && <p className="note" style={{ textAlign: 'center' }}>{v.options.length - answered === 1 ? 'A night was' : `${v.options.length - answered} nights were`} added since you voted — tap Change my votes to answer.</p>}
     <button type="button" className="ghost" onClick={onChange}>Change my votes</button>
     {canLock && leader && (
-      <button type="button" className="cta sm" disabled={busy}
-        onClick={() => act('lock', { option_id: leader.option.id, episodes: eps }, `Locked ${dayLabel(leader.option.date)} — everyone just got a ping.`)}>
+      <button type="button" className="ghost" disabled={busy}
+        onClick={() => { const o = leader.option; if (sure(`Lock ${dayLabel(o.date)}${o.time ? ` at ${timeLabel(o.time)}` : ''}`)) act('lock', { option_id: o.id, episodes: eps }, `Set: ${dayLabel(o.date)}.`); }}>
         Lock {dayLabel(leader.option.date)}{leader.option.time ? ` · ${timeLabel(leader.option.time)}` : ''} now
       </button>
     )}
+    <ShareLink text={pollShareText(v)} />
     <Link className="linkbtn" href="/" style={{ textAlign: 'center' }}>Back to the leaderboard</Link>
   </>);
 }
@@ -495,7 +559,7 @@ function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVot
     <section className={`opt ${lead ? 'lead' : ''}`} aria-label={`${dayLabel(o.date)}, ${timeLabel(o.time)}`}>
       <div className="top">
         <div className="d"><b>{dayLabel(o.date)}{lead && <span className="lead-tag">Leading</span>}</b><span>{timeLabel(o.time)}{o.time ? '' : ' · any time that day'}</span></div>
-        <div className={`cnt ${row.clears ? 'clear' : ''}`}><Dots roster={roster} inTeams={row.teamsIn} /><span className="num">{row.teamsIn.length} of {roster.teams.length} teams</span></div>
+        <div className={`cnt ${row.clears ? 'clear' : ''}`}><Dots roster={roster} inTeams={row.teamsIn} maybeTeams={row.teamsMaybe} /><span className="num">{row.teamsIn.length} of {roster.teams.length} teams</span></div>
       </div>
       {onVote && me && (
         <div className="ans" role="group" aria-label={`Your answer for ${dayLabel(o.date)}`}>
@@ -552,7 +616,7 @@ function AddNight({ v, busy, onAdd, onCancel }: { v: V; busy: boolean; onAdd: (o
         <label className="field">Date<input type="date" value={date} min={addDays(dueDay, 1)} onChange={e => setDate(e.target.value)} /></label>
         <label className="field">Time<TimeSelect wide value={time} onChange={setTime} label="Time" /></label>
       </div>
-      <p className="note" style={{ marginTop: 8 }}>Has to be after the vote deadline. Everyone gets a ping to vote on it.</p>
+      <p className="note" style={{ marginTop: 8 }}>Has to be after the vote deadline.</p>
       <div className="row2" style={{ marginTop: 12 }}>
         <button type="button" className="ghost" onClick={onCancel}>Cancel</button>
         <button type="button" className="cta sm" disabled={busy || !date} onClick={() => onAdd({ date, time })}>Add it</button>
@@ -570,14 +634,14 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
   const t = tally(v.options.filter(o => o.date >= today), votes, roster);
   return (<>
     <section className="card hi">
-      <div className="hrow"><h2 className="eyebrow">Next viewing</h2><span className="pill grey">Poll closed</span></div>
+      <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill grey">Poll closed</span></div>
       <h2 className="title">No night got {bar} of {roster.teams.length} teams</h2>
       <p className="lede">{v.created_by}’s poll · {waitingOn(v.options, votes, roster).length === 0 ? `all ${roster.voters.length} voted` : 'the deadline passed'}</p>
     </section>
     {t.map(row => (
       <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={false} canLock={canLock} busy={busy}
         lockLabel={`Lock ${weekdayShort(row.option.date)} anyway`}
-        onLock={() => act('lock', { option_id: row.option.id }, `Locked ${dayLabel(row.option.date)} — everyone just got a ping.`)} />
+        onLock={() => { if (sure(`Lock ${dayLabel(row.option.date)} anyway`)) act('lock', { option_id: row.option.id }, `Set: ${dayLabel(row.option.date)}.`); }} />
     ))}
     {canLock && <p className="note">Open a night’s votes to lock it anyway.</p>}
     <button type="button" className="cta sm" onClick={onReopen}>Add more nights &amp; reopen</button>
@@ -588,20 +652,21 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
 
 /* ── locked ──────────────────────────────────────────────────────────── */
 
-function Locked({ v, votes, roster, bar, places, addresses, people, canLock, busy, act, onWho }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; places: string[]; addresses: Record<string, string>; people: string[]; canLock: boolean; busy: boolean; act: Act; onWho: () => void;
+function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock, busy, act, onPick }: {
+  v: V; votes: Vote[]; roster: Roster; bar: number; places: string[]; addresses: Record<string, string>; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
 }) {
   const date = v.lock_date!;
-  const going = attendees(v, votes, roster);
-  const inTeams = teamsIn(going, roster);
+  const going = goingList(v, votes, roster);
+  const coming = going.filter(g => g.s === 'in');
+  const unsure = going.filter(g => g.s === 'unsure');
+  const cant = going.filter(g => g.s === 'out');
+  const inTeams = teamsIn(coming.map(g => g.name), roster);
   const [eps, setEps] = useState(v.episodes);
   useEffect(() => setEps(v.episodes), [v.episodes]);
   const [other, setOther] = useState('');
   const [editPlace, setEditPlace] = useState(false);
   const [time, setTime] = useState<string | null>('19:00');
-  const [cant, setCant] = useState(false);
   const [cal, setCal] = useState(false);
-  const [showWho, setShowWho] = useState(false);
   const [moving, setMoving] = useState(false);
   const [newDate, setNewDate] = useState(date);
   const [newTime, setNewTime] = useState<string | null>(v.lock_time);
@@ -614,16 +679,20 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
   const [apple, setApple] = useState(true); // Apple Maps on iPhone/iPad/Mac, Google Maps elsewhere
   useEffect(() => { setApple(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)); }, []);
   const dest = address ?? (v.place && !isPreset ? v.place : null);
-  const mine = people.filter(p => roster.voters.some(x => x.name === p));
+  const mine = going.filter(g => people.includes(g.name));
+  const anyUnsure = mine.some(g => g.s === 'unsure');
+  const tonight = date === todayET();
+  const shareText = `Survivor night: ${weekdayLong(date)}, ${dayLabel(date).split(', ')[1]}${v.lock_time ? ` at ${timeLabel(v.lock_time).replace(':00', '')}` : ''}${v.place ? ` at ${v.place}` : ''}.`;
+  const names = (gs: typeof going) => gs.map(g => `${g.name}${g.s === 'unsure' && g.said === 'm' ? ' (said Maybe)' : ''}${g.by !== 'vote' && g.by !== g.name ? ` (by ${g.by})` : ''}`).join(', ');
 
   return (<>
     <section className="card hi">
-      <div className="hrow"><h2 className="eyebrow">Next viewing</h2><span className="pill"><i />{date === todayET() ? 'Tonight' : 'Locked'}</span></div>
+      <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill"><i />{tonight ? 'Tonight' : 'Set'}</span></div>
       <div className="when">
         <div className="tile" aria-hidden><div>{MON[m - 1]}</div><b className="num">{d}</b></div>
         <div style={{ minWidth: 0 }}>
           <div className="big">{weekdayLong(date)}{v.lock_time ? ` · ${timeLabel(v.lock_time)}` : ''}</div>
-          <div className="lede" style={{ marginTop: 3 }}>{v.locked_by === 'auto' ? 'Locked by vote' : v.locked_by ? `Locked by ${v.locked_by}` : 'Locked'}</div>
+          <div className="lede" style={{ marginTop: 3 }}>{v.locked_by === 'auto' ? 'Picked by vote' : v.locked_by ? `Set by ${v.locked_by}` : 'Set'} · {epLabel(v.episodes)}</div>
           {canLock && !moving && <button type="button" className="linkbtn" style={{ paddingBottom: 0 }} onClick={openMove}>Change date or time</button>}
         </div>
       </div>
@@ -631,7 +700,7 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
       {moving && (
         <div className="box">
           <div className="t">Move it</div>
-          <div className="s">Everyone gets a ping with the new date and time.{v.drops.length ? ' A new day clears “can’t make it”.' : ''}</div>
+          <div className="s">Everyone sees the new date, and subscribed calendars update. On a new day, anyone who said they can’t make it goes back to “not sure”.</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10, marginTop: 12 }}>
             <label className="field">Date<input type="date" value={newDate} min={todayET()} onChange={e => setNewDate(e.target.value)} /></label>
             <label className="field">Time<TimeSelect wide value={newTime} onChange={setNewTime} label="Time" /></label>
@@ -639,7 +708,7 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
           <div className="row2" style={{ marginTop: 12 }}>
             <button type="button" className="ghost" onClick={() => setMoving(false)}>Never mind</button>
             <button type="button" className="cta sm" disabled={busy || !newDate || unchanged}
-              onClick={async () => { if (await act('reschedule', { date: newDate, time: newTime }, `Moved to ${dayLabel(newDate)} — everyone just got a ping.`)) setMoving(false); }}>Move it</button>
+              onClick={async () => { if (await act('reschedule', { date: newDate, time: newTime }, `Moved to ${dayLabel(newDate)}.`)) setMoving(false); }}>Move it</button>
           </div>
         </div>
       )}
@@ -647,9 +716,9 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
       {!v.lock_time && !moving && (
         <div className="box">
           <div className="t">What time?</div>
-          <div className="s">No start time yet — set one and everyone gets a ping.</div>
+          <div className="s">No start time yet.</div>
           <div className="chips"><TimeSelect value={time} onChange={setTime} allowTbd={false} label="Start time" />
-            <button type="button" className="chipbtn" disabled={busy || !time} onClick={() => act('set_time', { time }, 'Time set — everyone just got a ping.')}>Set time</button></div>
+            <button type="button" className="chipbtn" disabled={busy || !time} onClick={() => act('set_time', { time }, 'Time set.')}>Set time</button></div>
         </div>
       )}
 
@@ -666,56 +735,69 @@ function Locked({ v, votes, roster, bar, places, addresses, people, canLock, bus
           </div>
         ) : (<>
           <div className="t">Where is it?</div>
-          <div className="s">Anyone can set it. Everyone gets a ping when it’s set.</div>
+          <div className="s">Anyone can set it.</div>
           <div className="chips">
-            {places.map(p => <button key={p} type="button" className="tog" disabled={busy} onClick={async () => { if (await act('set_place', { place: p }, 'Where is set — everyone just got a ping.')) setEditPlace(false); }}>{p}</button>)}
+            {places.map(p => <button key={p} type="button" className="tog" disabled={busy} onClick={async () => { if (await act('set_place', { place: p }, 'Where is set.')) setEditPlace(false); }}>{p}</button>)}
           </div>
           <div className="inrow">
             <input type="text" placeholder="Somewhere else…" value={other} onChange={e => setOther(e.target.value)} aria-label="Somewhere else" />
-            <button type="button" disabled={busy || !other.trim()} onClick={async () => { if (await act('set_place', { place: other }, 'Where is set — everyone just got a ping.')) { setOther(''); setEditPlace(false); } }}>Set</button>
+            <button type="button" disabled={busy || !other.trim()} onClick={async () => { if (await act('set_place', { place: other }, 'Where is set.')) { setOther(''); setEditPlace(false); } }}>Set</button>
           </div>
           {editPlace && <button type="button" className="linkbtn" onClick={() => setEditPlace(false)}>Keep {v.place}</button>}
         </>)}
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        <Stepper label={`Watching ${epLabel(eps)}`} value={eps} disabled={busy} onChange={(n) => { setEps(n); act('set_episodes', { episodes: n }); }} />
+      {canLock && (
+        <div style={{ marginTop: 14 }}>
+          <Stepper label="Episodes" value={eps} disabled={busy} onChange={(n) => { setEps(n); act('set_episodes', { episodes: n }); }} />
+        </div>
+      )}
+
+      {/* who's coming: starts from the poll (Yes → coming, No → can't make it, Maybe / no vote → not sure) */}
+      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Dots roster={roster} inTeams={inTeams} />
+        <span className="num" style={{ fontWeight: 700, color: inTeams.length >= bar ? 'var(--text)' : 'var(--neg)' }}>
+          {inTeams.length} of {roster.teams.length} teams · {coming.length} coming{unsure.length ? ` · ${unsure.length} not sure` : ''}
+        </span>
       </div>
 
-      <button type="button" className="more" style={{ marginTop: 14, borderTop: 0, padding: '0 2px' }} aria-expanded={showWho} onClick={() => setShowWho(x => !x)}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><Dots roster={roster} inTeams={inTeams} />
-          <span style={{ color: inTeams.length >= bar ? 'var(--text)' : 'var(--neg)' }} className="num">{inTeams.length} of {roster.teams.length} teams · {going.length} coming</span></span>
-        <Chev />
-      </button>
-      {showWho && (
-        <div className="ps" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-          {roster.voters.map(p => {
-            const dropped = v.drops.includes(p.name); const yes = going.includes(p.name);
-            return <span key={p.name} className={`pchip ${dropped ? 'out' : ''}`} style={!yes && !dropped ? { color: 'var(--muted)' } : undefined}>{p.name}{dropped ? ' · can’t make it' : yes ? '' : ' · not a yes'}</span>;
+      {who && mine.length > 0 && (
+        <div className="box" style={anyUnsure ? { border: '1.5px solid var(--accent)', background: 'rgba(245,158,11,.08)' } : undefined}>
+          <div className="t">{mine.length === 1 ? 'Are you coming?' : 'Who’s coming from this phone?'}</div>
+          {mine.map(g => {
+            const ownElsewhere = g.name !== who.me && g.by === g.name; // they answered on their own phone — theirs stands
+            const set = (to: Going) => act('rsvp', { people: [g.name], status: to });
+            return (
+              <div key={g.name} style={{ marginTop: 10 }}>
+                {mine.length > 1 && <div className="s" style={{ marginBottom: 6, fontWeight: 700, color: 'var(--text)' }}>{g.name}</div>}
+                <div className="ans" style={{ gridTemplateColumns: 'repeat(2,minmax(0,1fr))', padding: 0 }} role="group" aria-label={`${g.name}: coming?`}>
+                  <button type="button" className={g.s === 'in' ? 'y' : ''} aria-pressed={g.s === 'in'} disabled={busy || ownElsewhere} onClick={() => set('in')}>I’m in</button>
+                  <button type="button" className={g.s === 'out' ? 'n' : ''} aria-pressed={g.s === 'out'} disabled={busy || ownElsewhere} onClick={() => set('out')}>Can’t make it</button>
+                </div>
+                <div className="s" style={{ marginTop: 6 }}>
+                  {ownElsewhere ? `${g.name} answered on their own phone.`
+                    : g.s === 'unsure' ? (g.said === 'm' ? `${g.name === who.me ? 'You' : g.name} said Maybe in the poll — let everyone know.` : 'Not answered yet.')
+                      : g.by !== 'vote' && g.by !== g.name ? `${g.by} answered for ${g.name}.`
+                        : g.by === 'vote' && g.said ? `From ${g.name === who.me ? 'your' : `${g.name}’s`} poll answer (${g.said === 'y' ? 'Yes' : 'No'}) — change it any time.` : 'Change it any time.'}
+                </div>
+              </div>
+            );
           })}
         </div>
       )}
+      {!who && <div style={{ marginTop: 14 }}><WhoInline roster={roster} who={who} onPick={onPick} verb="answering" /></div>}
 
-      <div className="row2" style={{ marginTop: 14 }}>
-        <button type="button" className="cta sm" aria-expanded={cal} onClick={() => { setCal(x => !x); setCant(false); }}>Add to calendar</button>
-        <button type="button" className="ghost" aria-expanded={cant} onClick={() => { setCal(false); people.length ? setCant(x => !x) : onWho(); }}>Can’t make it</button>
+      <div className="note" style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {coming.length > 0 && <span><b style={{ color: 'var(--text)' }}>Coming:</b> {names(coming)}</span>}
+        {unsure.length > 0 && <span><b style={{ color: 'var(--gold)' }}>Not sure:</b> {names(unsure)}</span>}
+        {cant.length > 0 && <span><b style={{ color: 'var(--neg)' }}>Can’t make it:</b> {names(cant)}</span>}
       </div>
+
+      <button type="button" className="ghost" style={{ marginTop: 14 }} aria-expanded={cal} onClick={() => setCal(x => !x)}>Add to calendar</button>
       {cal && <CalendarBox oneOff />}
-      {cant && (
-        <div className="box" style={{ background: 'var(--sunk)', border: '1px solid var(--line)' }}>
-          <div className="t">Who can’t make it anymore?</div>
-          <div className="chips">
-            {mine.map(p => {
-              const out = v.drops.includes(p);
-              return <button key={p} type="button" className="tog out" aria-pressed={out} disabled={busy}
-                onClick={() => act('drop', { people: [p], out: !out }, out ? `${p} is back in.` : `Got it — the group got a heads-up.`)}>{p}{out ? ' · out' : ''}</button>;
-            })}
-          </div>
-          <div className="s" style={{ marginTop: 10 }}>Tap again to undo. {inTeams.length >= bar ? `Still on — ${inTeams.length} of ${roster.teams.length} teams.` : `Below ${bar} of ${roster.teams.length} teams — talk it over, or whoever set it can cancel.`}</div>
-        </div>
-      )}
     </section>
-    {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm(`Cancel ${dayLabel(date)} for everyone?`)) act('cancel', {}, 'Cancelled — everyone just got a ping.'); }}>Cancel this viewing</button>}
+    <ShareLink text={shareText} />
+    {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm(`Cancel ${dayLabel(date)} for everyone?`)) act('cancel', {}, 'Cancelled.'); }}>Cancel this Survivor night</button>}
   </>);
 }
 
@@ -740,7 +822,7 @@ function CalendarBox({ oneOff }: { oneOff?: boolean }) {
   return (
     <div className="box" style={{ background: 'var(--sunk)', border: '1px solid var(--line)' }}>
       <div className="t">{c.subscribed ? 'You’re subscribed on this phone' : 'Subscribe once — it keeps itself up to date'}</div>
-      <div className="s">Every viewing night lands in your calendar on its own. If a night moves, gets a time or a place, or is cancelled, your calendar updates — nothing to delete or re-add.{c.apple ? '' : ' Google checks for changes every few hours.'}</div>
+      <div className="s">Every Survivor night lands in your calendar on its own. If a night moves, gets a time or a place, or is cancelled, your calendar updates — nothing to delete or re-add.{c.apple ? '' : ' Google checks for changes every few hours.'}</div>
       <div className="row2" style={{ marginTop: 12 }}>
         <a className="cta sm" href={primary.href} target="_blank" rel="noreferrer" onClick={c.mark}>{c.subscribed ? 'Subscribe again' : primary.label}</a>
         <a className="ghost" href={other.href} target="_blank" rel="noreferrer" onClick={c.mark} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>{other.label}</a>
@@ -754,7 +836,7 @@ function CalendarFooter() {
   const [open, setOpen] = useState(false);
   return (<>
     <p className="note" style={{ textAlign: 'center' }}>
-      📅 Get every viewing night in your calendar · <button type="button" className="linkbtn" aria-expanded={open} onClick={() => setOpen(x => !x)}>{open ? 'Hide' : 'Subscribe'}</button>
+      📅 Get every Survivor night in your calendar · <button type="button" className="linkbtn" aria-expanded={open} onClick={() => setOpen(x => !x)}>{open ? 'Hide' : 'Subscribe'}</button>
     </p>
     {open && <CalendarBox />}
   </>);
@@ -869,7 +951,7 @@ function PollForm({ mode, busy, existing, episodes, needWho, onSubmit }: {
     {needWho && <p className="note" style={{ textAlign: 'center', color: 'var(--gold)' }}>Tap your name at the top first.</p>}
     <button type="button" className="cta" disabled={busy || needWho || !options.length || !dueDay || dupes}
       onClick={() => dueDay && onSubmit({ options, deadline: dueDay, episodes: eps })}>
-      {mode === 'start' ? 'Start poll · ping everyone' : 'Reopen the poll · ping everyone'}
+      {mode === 'start' ? 'Start the poll' : 'Reopen the poll'}
     </button>
   </>);
 }
@@ -887,7 +969,7 @@ function AddDateForm({ busy, places, needWho, onSubmit }: { busy: boolean; place
   return (<>
     <div>
       <h2 className="title" style={{ marginTop: 4 }}>Already decided?</h2>
-      <p className="lede">Picked a night in person or over text? Put it in and it’s locked — no poll. If a poll closed without a winner, this replaces it.</p>
+      <p className="lede">Picked a night in person or over text? Put it in and it’s set — no poll. Everyone starts as coming and can say if they can’t make it. If a poll closed without a winner, this replaces it.</p>
     </div>
     <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10 }}>
@@ -908,6 +990,6 @@ function AddDateForm({ busy, places, needWho, onSubmit }: { busy: boolean; place
     </section>
     {needWho && <p className="note" style={{ textAlign: 'center', color: 'var(--gold)' }}>Tap your name at the top first.</p>}
     <button type="button" className="cta" disabled={busy || needWho || !date || (isOther && !other.trim())}
-      onClick={() => onSubmit({ date, time, place: isOther ? other.trim() : place, episodes: eps })}>Lock it in · ping everyone</button>
+      onClick={() => onSubmit({ date, time, place: isOther ? other.trim() : place, episodes: eps })}>Set it</button>
   </>);
 }
