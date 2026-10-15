@@ -78,13 +78,27 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
 
   // who's on this phone + commissioner key (shared with the draft room; ?key= saves it)
   useEffect(() => {
-    try { const w = JSON.parse(ls.get(WHO_KEY) || 'null'); if (w?.me) setWho({ me: w.me, also: Array.isArray(w.also) ? w.also : [] }); } catch { /* ignore */ }
+    // a saved name that's no longer a voter (renamed in the sheet, roster changed) is dropped, so this phone
+    // gets asked again instead of failing every tap with "Pick who you are first" (skipped if the roster didn't load)
+    const names = initial.roster.voters.map(v => v.name);
+    const ok = (n: unknown): n is string => typeof n === 'string' && (!names.length || names.includes(n));
+    try {
+      const w = JSON.parse(ls.get(WHO_KEY) || 'null');
+      if (w?.me && ok(w.me)) setWho({ me: w.me, also: Array.isArray(w.also) ? w.also.filter(ok) : [] });
+      else if (w) ls.del(WHO_KEY);
+    } catch { /* ignore */ }
     const url = new URL(window.location.href);
     const k = url.searchParams.get('key');
     if (k) { ls.set(COMMISH_KEY, k); url.searchParams.delete('key'); window.history.replaceState(null, '', url.toString()); }
     setKey(k || ls.get(COMMISH_KEY) || '');
-    if (go === 'start' || go === 'add') setScreen(go);
-  }, [go]);
+    // the homepage's Start a poll / We already picked a date links can be stale (a home-screen app resumes an
+    // old page) — only open the form if nothing is planned yet; otherwise show what's actually going on
+    if (go === 'start' || go === 'add') {
+      const cur = initial.viewing;
+      if (!cur || cur.status === 'closed') setScreen(go);
+      else setFlash(cur.status === 'polling' ? `${cur.created_by} already started a poll — vote below.` : 'The next viewing is already set — here it is.');
+    }
+  }, [go]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const people = useMemo(() => (who ? [who.me, ...who.also] : []), [who]);
 
@@ -178,7 +192,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {screen === 'who' && <WhoPicker roster={roster} who={who} onSave={saveWho} />}
         {(screen === 'start' || screen === 'add') && <WhoInline roster={roster} who={who} onPick={rememberWho} verb={screen === 'start' ? 'starting this poll' : 'adding the date'} />}
         {screen === 'start' && <PollForm mode="start" busy={busy} existing={[]} episodes={2} needWho={!who}
-          onSubmit={(p) => act('start', p, 'The poll is live — everyone just got a ping.')} />}
+          onSubmit={(p) => act('start', p, 'The poll is live — everyone just got a ping. Now add your own votes below.')} />}
         {screen === 'reopen' && v && <PollForm mode="reopen" busy={busy} existing={v.options} episodes={v.episodes}
           onSubmit={(p) => act('reopen', p, 'The poll is open again.')} />}
         {screen === 'add' && <AddDateForm busy={busy} places={st.places} needWho={!who} onSubmit={(p) => act('add_date', p, 'Locked in — everyone just got a ping.')} />}
@@ -339,6 +353,13 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
     if (total > 0 && answered === total) setShowResults(true);
   }, [who]); // eslint-disable-line react-hooks/exhaustive-deps
   const toTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  // "everyone has voted" means every night answered — so finishing with skipped nights saves them as No
+  // (otherwise you'd stay on "Waiting on …", get the evening-before nudge, and the poll couldn't lock early)
+  const finish = async () => {
+    const left = who ? v.options.filter(o => !votes.some(x => x.option_id === o.id && x.person === who.me)).map(o => o.id) : [];
+    if (left.length && !(await act('vote', { option_ids: left, answer: 'n' }))) return;
+    setShowResults(true); toTop();
+  };
 
   if (showResults && who) return (
     <Results v={v} votes={votes} roster={roster} bar={bar} t={t} waiting={waiting} me={who.me} answered={answered}
@@ -377,10 +398,10 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onWho
       : who && <button type="button" className="dashed" onClick={() => setAdding(true)}>+ None of these work? Add a night</button>}
 
     {who && (<>
-      <button type="button" className="cta" disabled={busy || answered === 0} onClick={() => { setShowResults(true); toTop(); }}>
-        {answered === 0 ? 'Vote on a night to finish' : 'Done — see results'}
+      <button type="button" className="cta" disabled={busy || answered === 0} onClick={finish}>
+        {answered === 0 ? 'Vote on a night to finish' : answered < total ? `Done — count the other ${total - answered === 1 ? 'one' : total - answered} as No` : 'Done — see results'}
       </button>
-      {answered > 0 && answered < total && <p className="note" style={{ textAlign: 'center', marginTop: -4 }}>{total - answered} night{total - answered === 1 ? '' : 's'} still unanswered — you can finish anyway.</p>}
+      {answered > 0 && answered < total && <p className="note" style={{ textAlign: 'center', marginTop: -4 }}>{total - answered} night{total - answered === 1 ? '' : 's'} still unanswered — finishing counts {total - answered === 1 ? 'it' : 'them'} as No, so the poll isn’t left waiting on you.</p>}
     </>)}
 
     <section className="card">
@@ -447,7 +468,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
       </div>
     </section>
 
-    {answered < v.options.length && <p className="note" style={{ textAlign: 'center' }}>You skipped {v.options.length - answered} night{v.options.length - answered === 1 ? '' : 's'}.</p>}
+    {answered < v.options.length && <p className="note" style={{ textAlign: 'center' }}>{v.options.length - answered === 1 ? 'A night was' : `${v.options.length - answered} nights were`} added since you voted — tap Change my votes to answer.</p>}
     <button type="button" className="ghost" onClick={onChange}>Change my votes</button>
     {canLock && leader && (
       <button type="button" className="cta sm" disabled={busy}
@@ -764,6 +785,8 @@ function PollForm({ mode, busy, existing, episodes, needWho, onSubmit }: {
   if (first) for (let d = earliest; d < first && dueChoices.length < 6; d = addDays(d, 1)) dueChoices.push(d);
   const dflt = dueChoices.find(d => d >= addDays(today, 2)) ?? dueChoices[dueChoices.length - 1] ?? null;
   const dueDay = due && dueChoices.includes(due) ? due : dflt;
+  // reopening: nights already on the poll that fall on or before the new deadline get dropped (server does the same)
+  const dropped = dueDay ? existing.filter(o => o.date >= today && o.date <= dueDay) : [];
 
   const toggleDay = (d: string) => setSel(s => { const n = { ...s }; if (n[d]) delete n[d]; else n[d] = ['19:00']; return n; });
   const setTime = (d: string, i: number, t: string | null) => setSel(s => ({ ...s, [d]: s[d].map((x, j) => (j === i ? t : x)) }));
@@ -837,6 +860,9 @@ function PollForm({ mode, busy, existing, episodes, needWho, onSubmit }: {
           </div>
         ) : <p className="note" style={{ marginTop: 10, color: 'var(--neg)' }}>The first night is too soon for a vote — pick a later night, or add the date directly.</p>}
         <p className="note" style={{ marginTop: 10 }}>Has to be before the first night. Closes early once everyone has voted; anyone missing gets a nudge the evening before.</p>
+        {dropped.length > 0 && <p className="note" style={{ marginTop: 8, color: 'var(--gold)' }}>
+          {dropped.map(o => `${dayLabel(o.date)}${o.time ? ` · ${timeLabel(o.time)}` : ''}`).join(', ')} {dropped.length === 1 ? 'comes' : 'come'} off the poll — {dropped.length === 1 ? 'it’s' : 'they’re'} on or before that deadline.
+        </p>}
       </section>
     )}
 
@@ -861,7 +887,7 @@ function AddDateForm({ busy, places, needWho, onSubmit }: { busy: boolean; place
   return (<>
     <div>
       <h2 className="title" style={{ marginTop: 4 }}>Already decided?</h2>
-      <p className="lede">Picked a night in person or over text? Put it in and it’s locked — no poll. If a poll is open, this closes it.</p>
+      <p className="lede">Picked a night in person or over text? Put it in and it’s locked — no poll. If a poll closed without a winner, this replaces it.</p>
     </div>
     <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 10 }}>
