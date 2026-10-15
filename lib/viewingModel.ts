@@ -17,6 +17,16 @@ export interface ViewingOption { id: string; date: string; time: string | null }
 
 export interface Vote { option_id: string; person: string; answer: Answer; cast_by: string }
 
+/** Coming / can't make it / not sure — for a set night. */
+export type Going = 'in' | 'out' | 'unsure';
+/**
+ * Someone's answer for a set night. Starts from their poll vote on the winning night (Yes → in, No → out,
+ * Maybe / no vote → unsure; a night added directly starts everyone as in) and is written out for every voter
+ * when the night is set. `by` = who set it ('vote' = carried over from the poll), `said` = their poll answer,
+ * `prev`/`at` let a quick undo skip a second ping.
+ */
+export interface Rsvp { s: Going; by: string; at: string; said?: Answer | null; prev?: Going }
+
 export interface Viewing {
   id: string;
   status: ViewingStatus;
@@ -31,7 +41,8 @@ export interface Viewing {
   locked_at: string | null;
   locked_by: string | null;      // a name, or "auto"
   place: string | null;
-  drops: string[];
+  drops: string[];                // older nights only — "can't make it" before answers were tracked
+  rsvp: Record<string, Rsvp>;
 }
 
 export interface Voter { name: string; team: string }
@@ -160,6 +171,7 @@ export interface OptionTally {
   option: ViewingOption;
   yes: string[]; maybe: string[]; no: string[];
   teamsIn: string[];
+  teamsMaybe: string[];   // teams with no Yes but at least one Maybe — the tiebreak
   rank: number;           // 1 = best
   clears: boolean;        // reaches the bar
 }
@@ -171,10 +183,16 @@ export function tally(options: ViewingOption[], votes: Vote[], roster: Roster): 
     const vs = votes.filter(v => v.option_id === o.id && teamOf.has(v.person));
     const pick = (a: Answer) => vs.filter(v => v.answer === a).map(v => v.person);
     const yes = pick('y');
+    const maybe = pick('m');
     const teamsIn = roster.teams.filter(t => yes.some(p => teamOf.get(p) === t));
-    return { option: o, yes, maybe: pick('m'), no: pick('n'), teamsIn, rank: 0, clears: teamsIn.length >= bar };
+    const teamsMaybe = roster.teams.filter(t => !teamsIn.includes(t) && maybe.some(p => teamOf.get(p) === t));
+    return { option: o, yes, maybe, no: pick('n'), teamsIn, teamsMaybe, rank: 0, clears: teamsIn.length >= bar };
   });
-  const sorted = [...rows].sort((a, b) => b.teamsIn.length - a.teamsIn.length || b.yes.length - a.yes.length || optKey(a.option).localeCompare(optKey(b.option)));
+  // best = most teams in → then Maybe breaks ties (most teams in-or-maybe) → most Yes → most Maybe → earliest
+  const sorted = [...rows].sort((a, b) => b.teamsIn.length - a.teamsIn.length
+    || (b.teamsIn.length + b.teamsMaybe.length) - (a.teamsIn.length + a.teamsMaybe.length)
+    || b.yes.length - a.yes.length || b.maybe.length - a.maybe.length
+    || optKey(a.option).localeCompare(optKey(b.option)));
   sorted.forEach((r, i) => { r.rank = i + 1; });
   return sorted;
 }
@@ -184,15 +202,65 @@ export function waitingOn(options: ViewingOption[], votes: Vote[], roster: Roste
   return roster.voters.map(v => v.name).filter(n => options.some(o => !votes.some(v => v.option_id === o.id && v.person === n)));
 }
 
-/** Who's coming to a locked night: Yes voters on the winning option (everyone, if it was added directly), minus drops. */
+/** The poll option a set night came from (null if it was added directly). */
+export function winnerOption(v: Pick<Viewing, 'options' | 'lock_date' | 'lock_time'>): ViewingOption | null {
+  return v.options.find(o => o.date === v.lock_date && o.time === v.lock_time) ?? v.options.find(o => o.date === v.lock_date) ?? null;
+}
+
+/** Where someone starts on a set night, from their vote on the winning option (directly added → everyone in). */
+export function startingRsvp(v: Pick<Viewing, 'options' | 'lock_date' | 'lock_time'>, votes: Vote[], name: string, at: string): Rsvp {
+  const w = winnerOption(v);
+  if (!w) return { s: 'in', by: 'vote', at, said: null };
+  const said = votes.find(x => x.option_id === w.id && x.person === name)?.answer ?? null;
+  return { s: said === 'y' ? 'in' : said === 'n' ? 'out' : 'unsure', by: 'vote', at, said };
+}
+
+export interface GoingRow { name: string; team: string; s: Going; by: string; said: Answer | null }
+/** Every voter's answer for a set night (saved answers; older nights fall back to their poll votes + drops). */
+export function goingList(v: Viewing, votes: Vote[], roster: Roster): GoingRow[] {
+  return roster.voters.map(({ name, team }) => {
+    const r = v.rsvp?.[name] ?? (v.drops.includes(name) ? { s: 'out' as Going, by: name, at: '', said: null } : startingRsvp(v, votes, name, ''));
+    return { name, team, s: r.s, by: r.by, said: r.said ?? null };
+  });
+}
+
+/** Who's coming to a set night. */
 export function attendees(v: Viewing, votes: Vote[], roster: Roster): string[] {
-  const winner = v.options.find(o => o.date === v.lock_date && o.time === v.lock_time)
-    ?? v.options.find(o => o.date === v.lock_date);
-  const base = winner
-    ? votes.filter(x => x.option_id === winner.id && x.answer === 'y').map(x => x.person)
-    : roster.voters.map(x => x.name);
-  return base.filter(n => !v.drops.includes(n) && roster.voters.some(x => x.name === n));
+  return goingList(v, votes, roster).filter(g => g.s === 'in').map(g => g.name);
+}
+export function notSure(v: Viewing, votes: Vote[], roster: Roster): string[] {
+  return goingList(v, votes, roster).filter(g => g.s === 'unsure').map(g => g.name);
+}
+
+/** "Saturday" this week, "Tonight"/"Tomorrow", else "Sat, Oct 31" — for push titles. */
+export function nightName(ymd: string, today = todayET()): string {
+  if (ymd === today) return 'Tonight';
+  if (ymd === addDays(today, 1)) return 'Tomorrow';
+  const gap = Math.round((Date.parse(ymd) - Date.parse(today)) / 86_400_000);
+  return gap > 0 && gap < 7 ? weekdayLong(ymd) : dayLabel(ymd);
+}
+/** Same, mid-sentence: "can't make it Saturday" / "tonight" / "on Sat, Oct 31". */
+export function nightMid(ymd: string, today = todayET()): string {
+  const n = nightName(ymd, today);
+  return n === 'Tonight' || n === 'Tomorrow' ? n.toLowerCase() : n.includes(',') ? `on ${n}` : n;
 }
 export function teamsIn(names: string[], roster: Roster): string[] {
   return roster.teams.filter(t => roster.voters.some(v => v.team === t && names.includes(v.name)));
+}
+
+/** One-line summary for link previews (iMessage etc.): what's going on with the next Survivor night. */
+export function previewLines(v: Viewing | null): { heading: string; sub: string; detail?: string } {
+  if (!v) return { heading: 'Survivor night', sub: 'Nothing planned yet — anyone can start a poll' };
+  if (v.status === 'polling' || v.status === 'closed') {
+    const days = [...new Set(v.options.map(o => o.date))].sort().map(dayLabel);
+    const list = days.length > 3 ? `${days.length} nights to pick from` : days.length <= 1 ? days.join('') : `${days.slice(0, -1).join(', ')} or ${days[days.length - 1]}`;
+    if (v.status === 'closed') return { heading: 'Survivor night', sub: 'No night worked yet', detail: list };
+    return { heading: 'Vote: next Survivor night', sub: list, detail: v.deadline ? `Vote by ${deadlineLabel(v.deadline)}` : undefined };
+  }
+  const d = v.lock_date!;
+  return {
+    heading: 'Survivor night',
+    sub: `${weekdayLong(d)}, ${dayLabel(d).split(', ')[1]}${v.lock_time ? ` · ${timeLabel(v.lock_time).replace(':00', '')}` : ''}`,
+    detail: v.place ? `At ${v.place}` : undefined,
+  };
 }

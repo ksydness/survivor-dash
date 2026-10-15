@@ -20,3 +20,12 @@ export default function VoteButton({ options, votes }: { options: ViewingOption[
   const done = answered > 0 && answered === options.length;
   return <Link className={done ? 'ghostbtn' : 'cta'} style={done ? { marginTop: 14 } : undefined} href="/viewing">{label}</Link>;
 }
+
+/** The homepage's set-night button: "Are you coming?" for a phone whose person hasn't said yet. */
+export function NightButton({ unsure, label }: { unsure: string[]; label: string }) {
+  const [me, setMe] = useState<string | null>(null);
+  useEffect(() => {
+    try { const w = JSON.parse(localStorage.getItem('survivor-viewer') || 'null'); if (w?.me) setMe(w.me); } catch { /* private mode */ }
+  }, []);
+  return <Link className="cta" href="/viewing">{me && unsure.includes(me) ? 'Are you coming?' : label}</Link>;
+}
