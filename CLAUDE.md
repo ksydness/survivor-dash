@@ -211,7 +211,7 @@ tab gets install instructions instead. The button hides itself until `VAPID_PRIV
   key is asked once and kept in Script Properties. Retroactive Update never notifies.
 - **Route** `app/api/push/notify`: key = `COMMISSIONER_KEY`; season defaults to the newest
   `active` registry row; week read via `getSeasonPayload` (lib/data.ts, no re-scoring). The message
-  is deliberately short ("🔥 S51 · Week 3 scores are in" / "Tap to see the leaderboard."); tapping
+  is short: "Week 3 scores are in" + the homepage recap's headline and first sentence (no 🔥 — the icon is one); tapping
   opens `/s/<n>?sync=1`, which the dashboard treats as a Refresh (bypasses the 3-min cache) and
   then strips from the URL. Each `(league, season, week)` is sent once (`push_sends` table).
   `GET /api/push/notify?season=N` previews the message without sending.
@@ -221,7 +221,7 @@ tab gets install instructions instead. The button hides itself until `VAPID_PRIV
 - Files: `lib/pushConfig.ts` (public VAPID key + title/accent — the only per-league differences),
   `lib/push.ts`, `app/api/push/{subscribe,notify}/route.ts`, `app/s/[season]/PushToggle.tsx`,
   `public/sw.js` (push + click only, no offline cache). Identical in both repos apart from
-  `pushConfig.ts`; both use the same VAPID key pair.
+  `pushConfig.ts` and survivor's `buildScoreMessage` copy (2026-10-15); both use the same VAPID key pair.
 
 ## Viewing nights (`/viewing`, 2026-10-13)
 
@@ -234,20 +234,20 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   (`cast_by`); results show "by Kenny". Honor system, like the draft room.
 - **Poll**: anyone starts one (one open at a time; a closed one is superseded). Each day = one or more
   start times (up to `MAX_TIMES_PER_DAY` = 4, each its own option; 12 options max per poll) or Time TBD. Yes / Maybe / No per option. A team is "in" if anyone on it says Yes;
-  bar = 3 of 4 teams (`barFor`). Best = most teams → most Yes → earliest. Votes due 9 PM ET on a day before
+  bar = 3 of 4 teams (`barFor`). Best = most teams → Maybe breaks ties (see below) → most Yes → earliest. Votes due 9 PM ET on a day before
   the first night.
 - **Locking**: auto at the deadline or the moment every voter has answered every option (if the best
   clears the bar; else status `closed` → "Lock anyway" / add nights & reopen / add a date). The poll
   starter or the commissioner (`survivor-commish-key`, shared with the draft room; `/viewing?key=…` saves it)
   can lock any option early, and cancel. In the home-screen app (no address bar, storage separate from
-  Safari) the key is entered via a hidden field: tap the "Next viewing" title 5× within 2s → paste → checked
+  Safari) the key is entered via a hidden field: tap the page title ("Survivor night") 5× within 2s → paste → checked
   server-side (action `checkkey`); that phone then shows "Commissioner ✓ · Remove".
 - **Locked**: set the time (if TBD won) and where (quick picks from the hub workbook's **Places** tab, or
-  typed), episodes stepper (anyone, any time), Add to calendar (see Calendar below),
-  "Can't make it" (drops, shows whether it's still ≥ bar). "We already picked a date" locks directly.
+  typed), episodes stepper (starter / commissioner), Add to calendar (see Calendar below),
+  I'm in / Can't make it (see "who's coming" below). "We already picked a date" locks directly.
   Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
-  locked row in place and pings "Moved: …"; a new *day* clears drops and re-arms the morning-of reminder.
-  If the new day wasn't a poll option, `attendees()` counts everyone (minus drops).
+  locked row in place and pings "Moved to …"; a new *day* resets "can't make it" to "not sure" and re-arms the
+  morning-of reminder.
   A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
 - **Places** (2026-10-14): the hub workbook (same one as the Seasons tab) has a **Places** tab
   (`Name | Address`), found by tab name via `findPublishedTab(SEASONS_CSV_URL, 'Places')` in
@@ -264,7 +264,7 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   several hours on its own schedule). "Add to calendar" on the locked card opens a box: Subscribe
   (`webcal://` on Apple devices, Google's `calendar/r?cid=webcal://…` elsewhere, the other as secondary) +
   "Just this night (won't update)" → the one-off `/api/viewing/ics` (same builder, same UID). When nothing is
-  locked, a "Get every viewing night in your calendar · Subscribe" note sits under the main card.
+  locked, a "Get every Survivor night in your calendar · Subscribe" note sits under the main card.
   `robots.ts` allows `/calendar.ics` (Google's importer honors robots.txt); everything else stays disallowed.
 - **Pushes** (same subscriptions as score notifications, `league = 'survivor'`; tap opens `/viewing`): poll
   started, night added, reopened, locked, moved, time/where set, someone drops, cancelled, no night cleared the bar;
@@ -292,11 +292,38 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   - Homepage `ResumeRefresh` re-renders after ≥1 min in the background (home-screen app resumes stale pages).
   - Not done (accepted for a friends league): anyone with the URL can act as anyone; two simultaneous "Start a
     poll" taps can create two polls (a partial unique index would fix it).
+- **Voting + set-night update (2026-10-15)** — user-facing word is **"Survivor night"** everywhere (pings, page
+  title, homepage card, calendar); code/routes still say "viewing".
+  - Name picking is inline chips (`WhoInline`) wherever it's needed (voting, answering for a set night, Start a
+    poll / Add the date); picking yourself asks "Also answering for <teammate>?"; a line tells non-voters (from
+    the Teams names minus Voters: Colt, Anna, Dan) there's nothing to do.
+  - **Proxies don't inherit powers**: lock / move / cancel / episodes need `me === created_by` (not a phone that
+    votes for the starter) or the commissioner key. "Lock … now" is a quiet button with a confirm.
+    Someone whose votes were cast for them sees "<Tony> answered for you — Looks right" (re-saves them as their
+    own) instead of landing on the results.
+  - **Maybe breaks ties**: rank = most teams with a Yes → most teams with a Yes or Maybe → most Yes → most Maybe →
+    earliest (`tally`, `teamsMaybe`); maybe-only teams show as half-filled dots.
+  - Episodes stepper only for the starter / commissioner; everyone else sees "2 episodes".
+  - **Set nights track who's coming** (`viewings.rsvp` jsonb: `{ name: { s: in|out|unsure, by, at, said, prev } }`),
+    written out for every voter when the night is set: Yes → in, No → out, Maybe / no vote → not sure ("said
+    Maybe" shown); "We already picked a date" starts everyone as in. Action `rsvp { people, status }` (old `drop`
+    maps onto it); one's own answer beats a proxy's. A new day on `reschedule` keeps "in" and resets "out" to "not
+    sure". Pings only when the plan changes: someone becomes in ("Megan is in for Saturday" / "Back to 3 of 4
+    teams"), or someone who was in drops ("Still 3 of 4 teams" / "Jake hasn't said yet" / "Down to 2 of 4");
+    not sure → can't make it is silent; undoing your own change within 2 min is silent. The lock ping and 10 AM
+    reminder add "You said Maybe — are you in?" for not-sure phones; the homepage button says "Are you coming?".
+    Older rows (no `rsvp`) fall back to poll votes + `drops`.
+  - Push copy: no 🔥 prefix (the icon is one); titles carry the news, bodies one detail (see `push(` calls).
+    Score pings: "Week N scores are in" + the homepage recap headline (`lib/push.ts` — diverges from bakeoff-dash).
+    Local dev prints every voter's would-be ping as `[push] Name: title | body` instead of sending.
+  - Small "Share with the group text" link (share sheet / copy) under the poll, results and set night; `/viewing`
+    has a live link preview (`previewLines` → `generateMetadata` + `app/viewing/opengraph-image.tsx`).
+  - Copy no longer promises pings (most phones don't have notifications on yet).
 - **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
   a Supabase **pg_cron** job `survivor-viewing-tick` calls it hourly at :05 via pg_net. Every page load also
   runs the deadline check.
 - **Storage**: `viewings` (one row per poll/night: status `polling|locked|closed|cancelled|superseded`,
-  options jsonb, lock_date/lock_time, place, drops, episodes, nudged_at/reminded_at, optimistic `version`)
+  options jsonb, lock_date/lock_time, place, drops (legacy), rsvp jsonb, episodes, nudged_at/reminded_at, optimistic `version`)
   and `viewing_votes` (viewing_id, option_id, person, answer y/m/n, cast_by) in **bakeoff-drafts**, RLS on,
   no policies (service role only). Preview deployments have no service key today, so `/viewing` there
   says "not connected"; if one is ever added, previews use league `survivor-preview` and never send pushes.
