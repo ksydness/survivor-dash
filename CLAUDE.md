@@ -257,7 +257,8 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
   locked row in place and pings "Moved to …"; a new *day* resets "can't make it" to "not sure" and re-arms the
   morning-of reminder.
-  **See the votes** (when the night came from a poll): read-only "How everyone voted" card — the poll's
+  **See the votes** (when the night came from a poll): read-only "How everyone voted" box right under the date
+  (inside the card, so it opens where you tapped — a separate card below the fold looked like nothing happened) — the poll's
   nights ranked (`NightRows`, shared with the poll results), the winner tagged "Picked", tap a night for
   everyone's answer team by team, "Didn't vote: …". Once you've answered, the box title becomes
   "You're in ✓" / "You can't make it" and the chosen button is a soft green/red tint with a ✓ (not the orange
@@ -348,6 +349,10 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   card so "Open Season N" stays above the fold).
 - Local dev without the service key: `VIEWING_DEV_MEMORY=1 npx next dev` uses an in-memory store
   (never in production).
+- **Before pushing any viewing / homepage-card change, run `scripts/e2e-viewing.py`** (Playwright, in-memory
+  store, setup in its docstring): starts a poll through the form, votes as Karina / Kenny (+ proxy for Lena),
+  tie → pick step, See the votes, I'm in / Can't make it (incl. the homepage label after Home and after a back
+  gesture), where, move, calendar, cancel, add a date. It fails if a tap's result isn't on screen.
 
 ## Environment variables (set in Vercel dashboard)
 
