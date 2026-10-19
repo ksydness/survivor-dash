@@ -6,6 +6,7 @@
 // Night Scheduler" canvas.
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePullRefresh } from '../PullToRefresh';
 import PushToggle from '../s/[season]/PushToggle';
@@ -13,7 +14,7 @@ import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
   type Going,
-  tally, waitingOn, goingList, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
+  tally, waitingOn, goingList, winnerOption, topNights, leadLine, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
   epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, MAX_TIMES_PER_DAY, addressFor, directionsUrl, placeKey,
 } from '@/lib/viewingModel';
 
@@ -103,6 +104,7 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
   const [hint, setHint] = useState<string | null>(null);
   const [keyBox, setKeyBox] = useState(false);   // hidden commissioner-key field (5 quick taps on the title)
   const taps = useRef<number[]>([]);
+  const router = useRouter();
 
   // who's on this phone + commissioner key (shared with the draft room; ?key= saves it)
   useEffect(() => {
@@ -170,11 +172,14 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(j.error || 'Something went wrong — try again.'); if (r.status === 409) load(); window.scrollTo({ top: 0, behavior: 'smooth' }); return false; }
       setSt(j); setScreen('main');
+      // the homepage copy held in the app's router cache still shows the old answer ("Are you coming?");
+      // refresh drops it so Home redraws from the server
+      router.refresh();
       if (done) { setFlash(done); window.scrollTo({ top: 0, behavior: 'smooth' }); }
       return true;
     } catch { setErr('Couldn’t reach the server — check your connection.'); return false; }
     finally { setBusy(false); }
-  }, [who, people, key, load]);
+  }, [who, people, key, load, router]);
 
   const rememberWho = (w: Who) => { setWho(w); ls.set(WHO_KEY, JSON.stringify(w)); };
   const saveWho = (w: Who) => { rememberWho(w); setScreen('main'); };
@@ -426,7 +431,7 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onPic
         <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
       </div>
-      {answered === 0 && <p className="note" style={{ marginTop: 10 }}>Locks itself then — or as soon as everyone has voted — on the night with the most teams saying Yes (needs {bar} of {roster.teams.length}). Maybes break ties.</p>}
+      {answered === 0 && <p className="note" style={{ marginTop: 10 }}>Once everyone has voted, the night with the most teams saying Yes locks itself (needs {bar} of {roster.teams.length}). If it’s a tie or people don’t vote, {v.created_by} picks after the deadline.</p>}
     </section>
 
     {(!who || !answered) && <WhoInline roster={roster} who={who} onPick={onPick} verb="voting" />}
@@ -487,16 +492,14 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
   v: V; votes: Vote[]; roster: Roster; bar: number; t: ReturnType<typeof tally>; waiting: string[]; me: string; answered: number;
   canLock: boolean; busy: boolean; eps: number; act: Act; onChange: () => void;
 }) {
-  const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
   const leader = t[0];
   const allIn = waiting.length === 0;
-  const [open, setOpen] = useState<string | null>(null);
   return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Your votes are in</h2><span className="pill"><i />Poll open</span></div>
       <h2 className="title">Thanks, {me} ✓</h2>
-      <p className="lede">{allIn ? 'Everyone has voted — it locks in a moment.'
-        : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. It locks itself then, or as soon as everyone has voted.</>}</p>
+      <p className="lede">{allIn ? 'Everyone has voted.'
+        : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. If everyone votes and one night is ahead, it locks itself — otherwise {v.created_by} picks.</>}</p>
       <div className="facts">
         <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
@@ -506,29 +509,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
     <section className="card" aria-label="Where it stands">
       <div className="hrow"><h3 className="eyebrow">Where it stands</h3><span className="note">needs {bar} of {roster.teams.length} teams</span></div>
       <p className="note" style={{ marginTop: 4 }}>Tap a night to see who voted.</p>
-      <div style={{ marginTop: 2 }}>
-        {t.map((row, i) => {
-          const mine = votes.find(x => x.option_id === row.option.id && x.person === me)?.answer;
-          const isOpen = open === row.option.id;
-          return (<div key={row.option.id}>
-            <button type="button" className="trow" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : row.option.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', background: 'none', border: 0, borderBottom: '1px solid var(--line)', color: 'inherit', textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
-              <div style={{ minWidth: 0 }}>
-                <b style={{ display: 'block' }}>{dayLabel(row.option.date)} · {timeLabel(row.option.time)}{i === 0 && leader.yes.length > 0 && <span className="lead-tag" style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginLeft: 8 }}>Leading</span>}</b>
-                <span className="note">{row.yes.length} yes · {row.maybe.length} maybe · {row.no.length} no · you said <b style={{ color: 'var(--text)' }}>{mine ? word[mine] : '—'}</b></span>
-              </div>
-              <div style={{ textAlign: 'right', flex: 'none' }}>
-                <Dots roster={roster} inTeams={row.teamsIn} maybeTeams={row.teamsMaybe} />
-                <div className="note num" style={{ color: row.clears ? 'var(--gold)' : undefined }}>{row.teamsIn.length} of {roster.teams.length}{row.clears ? ' ✓' : ''}</div>
-              </div>
-              <span style={{ flex: 'none', color: 'var(--muted)', display: 'flex', transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}><Chev /></span>
-            </button>
-            {isOpen && <div className="tray" style={{ borderTop: 0, borderRadius: 12, margin: '8px 0 6px' }}>
-              <VoteTray optionId={row.option.id} teamsIn={row.teamsIn} votes={votes} roster={roster} />
-            </div>}
-          </div>);
-        })}
-      </div>
+      <NightRows t={t} votes={votes} roster={roster} me={me} tag={(row, i) => (i === 0 && leader.yes.length > 0 ? 'Leading' : null)} />
     </section>
 
     {answered < v.options.length && <p className="note" style={{ textAlign: 'center' }}>{v.options.length - answered === 1 ? 'A night was' : `${v.options.length - answered} nights were`} added since you voted — tap Change my votes to answer.</p>}
@@ -544,9 +525,45 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
   </>);
 }
 
-function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVote, onLock, lockLabel = 'Lock this one' }: {
+/** Each night ranked, with team dots; tap one to see everyone's answer team by team. */
+function NightRows({ t, votes, roster, me, tag }: {
+  t: ReturnType<typeof tally>; votes: Vote[]; roster: Roster; me: string | null;
+  tag: (row: ReturnType<typeof tally>[number], i: number) => string | null;
+}) {
+  const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div style={{ marginTop: 2 }}>
+      {t.map((row, i) => {
+        const mine = me ? votes.find(x => x.option_id === row.option.id && x.person === me)?.answer : undefined;
+        const isOpen = open === row.option.id;
+        const label = tag(row, i);
+        return (<div key={row.option.id}>
+          <button type="button" className="trow" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : row.option.id)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', background: 'none', border: 0, borderBottom: '1px solid var(--line)', color: 'inherit', textAlign: 'left', font: 'inherit', cursor: 'pointer' }}>
+            <div style={{ minWidth: 0 }}>
+              <b style={{ display: 'block' }}>{dayLabel(row.option.date)} · {timeLabel(row.option.time)}{label && <span className="lead-tag" style={{ color: 'var(--gold)', fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', marginLeft: 8 }}>{label}</span>}</b>
+              <span className="note">{row.yes.length} yes · {row.maybe.length} maybe · {row.no.length} no{me && <> · you said <b style={{ color: 'var(--text)' }}>{mine ? word[mine] : '—'}</b></>}</span>
+            </div>
+            <div style={{ textAlign: 'right', flex: 'none' }}>
+              <Dots roster={roster} inTeams={row.teamsIn} maybeTeams={row.teamsMaybe} />
+              <div className="note num" style={{ color: row.clears ? 'var(--gold)' : undefined }}>{row.teamsIn.length} of {roster.teams.length}{row.clears ? ' ✓' : ''}</div>
+            </div>
+            <span style={{ flex: 'none', color: 'var(--muted)', display: 'flex', transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}><Chev /></span>
+          </button>
+          {isOpen && <div className="tray" style={{ borderTop: 0, borderRadius: 12, margin: '8px 0 6px' }}>
+            <VoteTray optionId={row.option.id} teamsIn={row.teamsIn} votes={votes} roster={roster} />
+          </div>}
+        </div>);
+      })}
+    </div>
+  );
+}
+
+function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVote, onLock, lockLabel = 'Lock this one', pickLabel }: {
   row: ReturnType<typeof tally>[number]; votes: Vote[]; roster: Roster; people: string[]; me: string | null; lead: boolean; canLock: boolean; busy: boolean;
   onVote?: (a: Answer) => void; onLock: () => void; lockLabel?: string;
+  pickLabel?: string; // shown right on the card (votes are in, someone picks) instead of tucked in the tray
 }) {
   const [open, setOpen] = useState(false);
   const o = row.option;
@@ -568,6 +585,7 @@ function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVot
           ))}
         </div>
       )}
+      {pickLabel && <div style={{ padding: '12px 14px 0' }}><button type="button" className="cta sm" style={{ width: '100%' }} disabled={busy} onClick={onLock}>{pickLabel}</button></div>}
       {splits.map(s => (
         <div key={s.person} className="split"><span>{s.person}’s own vote is <b>{word[s.answer]}</b> — it stays.</span></div>
       ))}
@@ -577,7 +595,7 @@ function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVot
       {open && (
         <div className="tray">
           <VoteTray optionId={o.id} teamsIn={row.teamsIn} votes={votes} roster={roster} />
-          {canLock && <button type="button" className="ghost" style={{ marginTop: 12 }} disabled={busy} onClick={onLock}>{lockLabel}</button>}
+          {canLock && !pickLabel && <button type="button" className="ghost" style={{ marginTop: 12 }} disabled={busy} onClick={onLock}>{lockLabel}</button>}
         </div>
       )}
     </section>
@@ -632,16 +650,41 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
 }) {
   const today = todayET();
   const t = tally(v.options.filter(o => o.date >= today), votes, roster);
+  const top = topNights(t);
+  const missed = waitingOn(v.options, votes, roster);
+  const voted = roster.voters.length - missed.length;
+  const lock = (o: ViewingOption, anyway: boolean) => {
+    if (sure(`Lock ${dayLabel(o.date)}${o.time ? ` at ${timeLabel(o.time)}` : ''}${anyway ? ' anyway' : ''}`)) act('lock', { option_id: o.id }, `Set: ${dayLabel(o.date)}.`);
+  };
+  // at least one night cleared the bar, but it wasn't a clean sweep (people didn't vote, or a tie): someone picks
+  if (top.length) return (<>
+    <section className="card hi">
+      <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill"><i />Votes are in</span></div>
+      <h2 className="title">{canLock ? 'Pick the night' : `${v.created_by} picks the night`}</h2>
+      <p className="lede">{leadLine(top, roster.teams.length)} · {voted} of {roster.voters.length} voted</p>
+      {missed.length > 0 && <p className="note" style={{ marginTop: 8 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></p>}
+      {!canLock && <p className="note" style={{ marginTop: 8 }}>It didn’t lock itself because {missed.length ? 'not everyone voted' : 'no single night was ahead'}.</p>}
+    </section>
+    {t.map(row => (
+      <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={top.includes(row) && top.length === 1}
+        canLock={canLock} busy={busy}
+        pickLabel={canLock && row.clears ? `Pick ${weekdayShort(row.option.date)}${row.option.time ? ` ${timeLabel(row.option.time)}` : ''}` : undefined}
+        lockLabel={`Lock ${weekdayShort(row.option.date)} anyway`}
+        onLock={() => lock(row.option, !row.clears)} />
+    ))}
+    <button type="button" className="ghost" onClick={onReopen}>Add more nights &amp; reopen</button>
+    <button type="button" className="linkbtn" onClick={onAdd}>We picked a date in person</button>
+  </>);
   return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill grey">Poll closed</span></div>
       <h2 className="title">No night got {bar} of {roster.teams.length} teams</h2>
-      <p className="lede">{v.created_by}’s poll · {waitingOn(v.options, votes, roster).length === 0 ? `all ${roster.voters.length} voted` : 'the deadline passed'}</p>
+      <p className="lede">{v.created_by}’s poll · {missed.length === 0 ? `all ${roster.voters.length} voted` : `${voted} of ${roster.voters.length} voted`}</p>
     </section>
     {t.map(row => (
       <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={false} canLock={canLock} busy={busy}
         lockLabel={`Lock ${weekdayShort(row.option.date)} anyway`}
-        onLock={() => { if (sure(`Lock ${dayLabel(row.option.date)} anyway`)) act('lock', { option_id: row.option.id }, `Set: ${dayLabel(row.option.date)}.`); }} />
+        onLock={() => lock(row.option, true)} />
     ))}
     {canLock && <p className="note">Open a night’s votes to lock it anyway.</p>}
     <button type="button" className="cta sm" onClick={onReopen}>Add more nights &amp; reopen</button>
@@ -668,6 +711,18 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
   const [time, setTime] = useState<string | null>('19:00');
   const [cal, setCal] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [showVotes, setShowVotes] = useState(false);
+  // why this night: its team count, whether it beat the rest, and turnout (only for a night that came from a poll)
+  const why = (() => {
+    const w = winnerOption(v);
+    if (!w) return null;
+    const t = tally(v.options, votes, roster);
+    const r = t.find(x => x.option.id === w.id);
+    if (!r) return null;
+    const best = t.filter(x => x !== r).every(x => x.teamsIn.length < r.teamsIn.length);
+    const voted = roster.voters.filter(x => votes.some(y => y.person === x.name)).length;
+    return `${r.teamsIn.length} of ${roster.teams.length} teams said Yes${best && t.length > 1 ? ' — the most of any night' : ''} · ${voted} of ${roster.voters.length} voted`;
+  })();
   const [newDate, setNewDate] = useState(date);
   const [newTime, setNewTime] = useState<string | null>(v.lock_time);
   const openMove = () => { setNewDate(date); setNewTime(v.lock_time); setMoving(true); };
@@ -693,7 +748,11 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
         <div style={{ minWidth: 0 }}>
           <div className="big">{weekdayLong(date)}{v.lock_time ? ` · ${timeLabel(v.lock_time)}` : ''}</div>
           <div className="lede" style={{ marginTop: 3 }}>{v.locked_by === 'auto' ? 'Picked by vote' : v.locked_by ? `Set by ${v.locked_by}` : 'Set'} · {epLabel(v.episodes)}</div>
-          {canLock && !moving && <button type="button" className="linkbtn" style={{ paddingBottom: 0 }} onClick={openMove}>Change date or time</button>}
+          {why && <div className="note" style={{ marginTop: 3 }}>{why}</div>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 14 }}>
+            {v.options.length > 0 && <button type="button" className="linkbtn" style={{ paddingBottom: 0 }} aria-expanded={showVotes} onClick={() => setShowVotes(x => !x)}>{showVotes ? 'Hide the votes' : 'See the votes'}</button>}
+            {canLock && !moving && <button type="button" className="linkbtn" style={{ paddingBottom: 0 }} onClick={openMove}>Change date or time</button>}
+          </div>
         </div>
       </div>
 
@@ -763,7 +822,7 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
 
       {who && mine.length > 0 && (
         <div className="box" style={anyUnsure ? { border: '1.5px solid var(--accent)', background: 'rgba(245,158,11,.08)' } : undefined}>
-          <div className="t">{mine.length === 1 ? 'Are you coming?' : 'Who’s coming from this phone?'}</div>
+          <div className="t">{mine.length > 1 ? 'Who’s coming from this phone?' : mine[0].s === 'in' ? 'You’re in ✓' : mine[0].s === 'out' ? 'You can’t make it' : 'Are you coming?'}</div>
           {mine.map(g => {
             const ownElsewhere = g.name !== who.me && g.by === g.name; // they answered on their own phone — theirs stands
             const set = (to: Going) => act('rsvp', { people: [g.name], status: to });
@@ -771,8 +830,8 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
               <div key={g.name} style={{ marginTop: 10 }}>
                 {mine.length > 1 && <div className="s" style={{ marginBottom: 6, fontWeight: 700, color: 'var(--text)' }}>{g.name}</div>}
                 <div className="ans" style={{ gridTemplateColumns: 'repeat(2,minmax(0,1fr))', padding: 0 }} role="group" aria-label={`${g.name}: coming?`}>
-                  <button type="button" className={g.s === 'in' ? 'y' : ''} aria-pressed={g.s === 'in'} disabled={busy || ownElsewhere} onClick={() => set('in')}>I’m in</button>
-                  <button type="button" className={g.s === 'out' ? 'n' : ''} aria-pressed={g.s === 'out'} disabled={busy || ownElsewhere} onClick={() => set('out')}>Can’t make it</button>
+                  <button type="button" className={g.s === 'in' ? 'in' : ''} aria-pressed={g.s === 'in'} disabled={busy || ownElsewhere} onClick={() => set('in')}>{g.s === 'in' && <Check />}I’m in</button>
+                  <button type="button" className={g.s === 'out' ? 'n' : ''} aria-pressed={g.s === 'out'} disabled={busy || ownElsewhere} onClick={() => set('out')}>{g.s === 'out' && <Check />}Can’t make it</button>
                 </div>
                 <div className="s" style={{ marginTop: 6 }}>
                   {ownElsewhere ? `${g.name} answered on their own phone.`
@@ -796,6 +855,19 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
       <button type="button" className="ghost" style={{ marginTop: 14 }} aria-expanded={cal} onClick={() => setCal(x => !x)}>Add to calendar</button>
       {cal && <CalendarBox oneOff />}
     </section>
+    {showVotes && v.options.length > 0 && (() => {
+      const t = tally(v.options, votes, roster);
+      const picked = winnerOption(v);
+      const missed = roster.voters.map(x => x.name).filter(n => !votes.some(x => x.person === n));
+      return (
+        <section className="card" aria-label="How everyone voted">
+          <div className="hrow"><h3 className="eyebrow">How everyone voted</h3><span className="note">needed {bar} of {roster.teams.length} teams</span></div>
+          <p className="note" style={{ marginTop: 4 }}>{v.created_by}’s poll · tap a night to see who said what.</p>
+          <NightRows t={t} votes={votes} roster={roster} me={who?.me ?? null} tag={(row) => (picked && row.option.id === picked.id ? 'Picked' : null)} />
+          {missed.length > 0 && <p className="note" style={{ marginTop: 10 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></p>}
+        </section>
+      );
+    })()}
     <ShareLink text={shareText} />
     {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm(`Cancel ${dayLabel(date)} for everyone?`)) act('cancel', {}, 'Cancelled.'); }}>Cancel this Survivor night</button>}
   </>);

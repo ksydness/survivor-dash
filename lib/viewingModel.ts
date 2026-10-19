@@ -197,6 +197,32 @@ export function tally(options: ViewingOption[], votes: Vote[], roster: Roster): 
   return sorted;
 }
 
+/**
+ * The night that wins outright: it clears the bar AND more teams said Yes to it than to any other night.
+ * A poll only locks itself when everyone has voted and there's a clear winner like this — anything else
+ * (people didn't vote, a tie, nothing cleared) waits for the poll starter or commissioner to pick.
+ */
+export function clearWinner(t: OptionTally[]): OptionTally | null {
+  const [a, b] = t;
+  return a && a.clears && (!b || a.teamsIn.length > b.teamsIn.length) ? a : null;
+}
+
+/** Nights that cleared the bar with the most teams (1 = a leader, 2+ = a tie); empty if none cleared. */
+export function topNights(t: OptionTally[]): OptionTally[] {
+  const best = t[0];
+  return best?.clears ? t.filter(r => r.teamsIn.length === best.teamsIn.length) : [];
+}
+
+/** "Fri 6:30 PM has the most teams (3 of 4)" / "Fri 6:30 PM and Sat 6 PM are tied at 3 of 4 teams". */
+export function leadLine(top: OptionTally[], teamCount: number): string {
+  if (!top.length) return '';
+  const n = `${top[0].teamsIn.length} of ${teamCount}`;
+  const lab = (r: OptionTally) => `${DOW[dow(r.option.date)]}${r.option.time ? ` ${shortTime(r.option.time)}` : ''}`;
+  if (top.length === 1) return `${lab(top[0])} has the most teams (${n})`;
+  const ls = [...top].sort((a, b) => optKey(a.option).localeCompare(optKey(b.option))).map(lab);
+  return `${ls.slice(0, -1).join(', ')} and ${ls[ls.length - 1]} are tied at ${n} teams`;
+}
+
 /** Voters who still haven't answered every option. */
 export function waitingOn(options: ViewingOption[], votes: Vote[], roster: Roster): string[] {
   return roster.voters.map(v => v.name).filter(n => options.some(o => !votes.some(v => v.option_id === o.id && v.person === n)));
@@ -249,12 +275,15 @@ export function teamsIn(names: string[], roster: Roster): string[] {
 }
 
 /** One-line summary for link previews (iMessage etc.): what's going on with the next Survivor night. */
-export function previewLines(v: Viewing | null): { heading: string; sub: string; detail?: string } {
+export function previewLines(v: Viewing | null, votes: Vote[] = [], roster?: Roster): { heading: string; sub: string; detail?: string } {
   if (!v) return { heading: 'Survivor night', sub: 'Nothing planned yet — anyone can start a poll' };
   if (v.status === 'polling' || v.status === 'closed') {
     const days = [...new Set(v.options.map(o => o.date))].sort().map(dayLabel);
     const list = days.length > 3 ? `${days.length} nights to pick from` : days.length <= 1 ? days.join('') : `${days.slice(0, -1).join(', ')} or ${days[days.length - 1]}`;
-    if (v.status === 'closed') return { heading: 'Survivor night', sub: 'No night worked yet', detail: list };
+    if (v.status === 'closed') {
+      const needsPick = !!roster && topNights(tally(v.options, votes, roster)).length > 0;
+      return { heading: 'Survivor night', sub: needsPick ? `Votes are in — ${v.created_by} picks the night` : 'No night worked yet', detail: list };
+    }
     return { heading: 'Vote: next Survivor night', sub: list, detail: v.deadline ? `Vote by ${deadlineLabel(v.deadline)}` : undefined };
   }
   const d = v.lock_date!;

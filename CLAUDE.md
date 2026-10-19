@@ -236,8 +236,17 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   start times (up to `MAX_TIMES_PER_DAY` = 4, each its own option; 12 options max per poll) or Time TBD. Yes / Maybe / No per option. A team is "in" if anyone on it says Yes;
   bar = 3 of 4 teams (`barFor`). Best = most teams → Maybe breaks ties (see below) → most Yes → earliest. Votes due 9 PM ET on a day before
   the first night.
-- **Locking**: auto at the deadline or the moment every voter has answered every option (if the best
-  clears the bar; else status `closed` → "Lock anyway" / add nights & reopen / add a date). The poll
+- **Locking** (rules changed 2026-10-18, Kenny's call): the poll is checked at the deadline or the moment every
+  voter has answered every option. It **locks itself only when everyone voted AND one night clearly wins**
+  (`clearWinner`: clears the bar with more teams saying Yes than any other night — the Maybe tiebreak only orders
+  the list). Anything else closes it (status `closed`): if a night cleared the bar (`topNights`) it's
+  **"Votes are in — Karina picks the night"** — Pick buttons on the clearing nights for the starter/commissioner,
+  everyone else sees who picks, the lead/tie (`leadLine`), turnout and who didn't vote; push: starter's phone
+  "pick the Survivor night", others "<starter> picks …"; if nobody picks, the hourly tick reminds the starter's
+  phones once at 10 AM ET the next day (`reminded_at`, reset on close/reopen; needs `updated_at` in COLS).
+  If no night cleared → the old "No night got 3 of 4 teams" screen (Lock anyway / add nights & reopen / add a
+  date). A set night from a poll shows a reason line ("3 of 4 teams said Yes — the most of any night · 4 of 8
+  voted"). Trigger: Oct 2026 poll where 4 of 8 voted and Friday auto-locked on 3 teams. The poll
   starter or the commissioner (`survivor-commish-key`, shared with the draft room; `/viewing?key=…` saves it)
   can lock any option early, and cancel. In the home-screen app (no address bar, storage separate from
   Safari) the key is entered via a hidden field: tap the page title ("Survivor night") 5× within 2s → paste → checked
@@ -248,6 +257,12 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   Whoever set it up (or the commissioner) can **Change date or time** (action `reschedule`): moves the
   locked row in place and pings "Moved to …"; a new *day* resets "can't make it" to "not sure" and re-arms the
   morning-of reminder.
+  **See the votes** (when the night came from a poll): read-only "How everyone voted" card — the poll's
+  nights ranked (`NightRows`, shared with the poll results), the winner tagged "Picked", tap a night for
+  everyone's answer team by team, "Didn't vote: …". Once you've answered, the box title becomes
+  "You're in ✓" / "You can't make it" and the chosen button is a soft green/red tint with a ✓ (not the orange
+  CTA gradient); the homepage button becomes a quiet "You're in ✓ · Details". Every successful action calls
+  `router.refresh()` so the homepage held in the client router cache doesn't show the old answer.
   A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
 - **Places** (2026-10-14): the hub workbook (same one as the Seasons tab) has a **Places** tab
   (`Name | Address`), found by tab name via `findPublishedTab(SEASONS_CSV_URL, 'Places')` in
@@ -354,7 +369,8 @@ Claude pushes through the GitHub connector (the "Claude Github MCP Connector" ap
 the account): `create_or_update_file` per file. The `sha` is the blob SHA of the file currently on
 the remote — take it from the previous push result or `get_file_contents` (sandbox clones are
 shallow and go stale, so `git rev-parse main:<path>` can be wrong); check the returned blob sha
-equals `git hash-object <local file>`. `push_files` 403s. Then verify the Vercel auto-deploy went
+equals `git hash-object <local file>`. `push_files` (several files, one commit) worked on 2026-10-18 — push to a
+branch, `git fetch` it and `git diff` against the local commit (must be empty), then PR + merge. Then verify the Vercel auto-deploy went
 READY (`list_deployments` on `prj_VxXVuN59tvb2To4BDTFlUPRsII3s`, team
 `team_ehXYoYTnX36nTlQX4GkRIbwA`). `git push` / API writes from the sandbox are blocked by its proxy,
 and a pasted PAT does not help — don't ask for one. Env var changes need a redeploy (any commit).

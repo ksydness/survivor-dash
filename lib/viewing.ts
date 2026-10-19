@@ -13,7 +13,7 @@ import { VAPID_PUBLIC_KEY, PUSH_SUBJECT } from './pushConfig';
 import { getSeasons, getDraftData, getPlaces } from './data';
 import {
   type Answer, type Roster, type Viewing, type ViewingOption, type ViewingState, type Vote, type Going, type Rsvp,
-  PLACES, addressFor, barFor, buildRoster, tally, waitingOn, attendees, teamsIn, todayET, hourET, etToUtc,
+  PLACES, addressFor, barFor, buildRoster, tally, waitingOn, clearWinner, topNights, leadLine, attendees, teamsIn, todayET, hourET, etToUtc,
   isYmd, isHhmm, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayShort, optKey,
   goingList, startingRsvp, nightName, nightMid,
   DEADLINE_HOUR, NUDGE_LEAD_H, NUDGE_FROM_HOUR, REMINDER_HOUR, MAX_EPISODES, MAX_TIMES_PER_DAY,
@@ -30,7 +30,7 @@ export function viewingConfigured(): boolean {
 /* ── store ─────────────────────────────────────────────────────────────── */
 
 type Row = Viewing & { league: string; nudged_at: string | null; reminded_at: string | null; updated_at?: string };
-const COLS = 'id,status,created_by,created_at,version,deadline,episodes,options,lock_date,lock_time,locked_at,locked_by,place,drops,rsvp,nudged_at,reminded_at';
+const COLS = 'id,status,created_by,created_at,updated_at,version,deadline,episodes,options,lock_date,lock_time,locked_at,locked_by,place,drops,rsvp,nudged_at,reminded_at';
 
 interface Store {
   latest(): Promise<Row | null>;
@@ -96,7 +96,7 @@ const memoryStore: Store = {
   async update(id, version, patch) {
     const r = mem.rows.find(x => x.id === id);
     if (!r || r.version !== version) return null;
-    Object.assign(r, patch, { version: version + 1 }); return { ...r };
+    Object.assign(r, patch, { version: version + 1, updated_at: new Date().toISOString() }); return { ...r };
   },
   async votes(id) { return mem.votes.filter(v => v.viewing_id === id).map(({ viewing_id: _, ...v }) => v); },
   async upsertVotes(id, vs) {
@@ -260,18 +260,35 @@ export async function getCalendarNights(): Promise<{ nights: Viewing[]; addresse
 
 /* ── locking ───────────────────────────────────────────────────────────── */
 
-/** Close a poll when its deadline has passed or every voter has answered every option. */
+/**
+ * Close a poll when its deadline has passed or every voter has answered every option. It locks itself ONLY
+ * when everyone voted and one night clearly wins (more teams with a Yes than any other — `clearWinner`).
+ * Anything else — people didn't vote, a tie, nothing cleared the bar — closes it and waits for the poll
+ * starter or commissioner to pick (Kenny's call, 2026-10-18, after a 4-of-8-voted poll auto-picked a night
+ * people didn't expect).
+ */
 async function finalizeIfDue(row: Row, votes: Vote[], roster: Roster, force = false): Promise<Row | null> {
   const opts = row.options ?? [];
   const pastDeadline = !!row.deadline && Date.now() >= Date.parse(row.deadline);
   const allIn = opts.length > 0 && waitingOn(opts, votes, roster).length === 0;
   if (!force && !pastDeadline && !allIn) return null;
-  const best = tally(opts, votes, roster)[0];
-  if (best?.clears) return lockRow(row, best.option.date, best.option.time, 'auto', votes, roster);
-  const closed = await store().update(row.id, row.version, { status: 'closed' });
+  const t = tally(opts, votes, roster);
+  const winner = allIn ? clearWinner(t) : null;
+  if (winner) return lockRow(row, winner.option.date, winner.option.time, 'auto', votes, roster);
+  const closed = await store().update(row.id, row.version, { status: 'closed', reminded_at: null });
   if (closed) {
-    await push({ title: `No night worked for ${barFor(roster.teams.length)} of ${roster.teams.length} teams`,
-      body: `Add another night, or ${row.created_by} can pick one anyway.`, tag: `viewing-${row.id}-closed` });
+    const top = topNights(t);
+    const n = roster.teams.length;
+    if (top.length) {
+      const voted = roster.voters.length - waitingOn(opts, votes, roster).length;
+      const why = `${leadLine(top, n)} · ${voted} of ${roster.voters.length} voted`;
+      await push(people => (people.includes(row.created_by)
+        ? { title: 'Votes are in — pick the Survivor night', body: `${why}.`, tag: `viewing-${row.id}-closed` }
+        : { title: `Votes are in — ${row.created_by} picks the Survivor night`, body: `${why}.`, tag: `viewing-${row.id}-closed` }));
+    } else {
+      await push({ title: `No night worked for ${barFor(n)} of ${n} teams`,
+        body: `Add another night, or ${row.created_by} can pick one anyway.`, tag: `viewing-${row.id}-closed` });
+    }
   }
   return closed;
 }
@@ -452,7 +469,7 @@ export async function act(body: ActionBody): Promise<ViewingState> {
       // older nights on or before the new deadline day would close (and could lock) after they've happened
       const dueDay = todayET(new Date(deadline));
       const open = kept.filter(x => x.date > dueDay);
-      await save({ status: 'polling', options: open, deadline, nudged_at: null });
+      await save({ status: 'polling', options: open, deadline, nudged_at: null, reminded_at: null });
       await push({ title: 'The poll is open again', body: `${nightsList(fresh)} added · vote by ${dueShort(deadline)}`, tag: `viewing-${row.id}-reopen` });
       break;
     }
@@ -622,6 +639,19 @@ export async function tick(): Promise<Record<string, unknown>> {
           };
         }, people => people.some(p => missing.includes(p)));
         return { status: 'nudged', missing };
+      }
+    }
+  }
+
+  // votes are in but nobody has picked yet: remind the poll starter once, the next morning
+  if (row.status === 'closed' && !row.reminded_at && hourET() >= REMINDER_HOUR && row.updated_at && todayET(new Date(row.updated_at)) < todayET()) {
+    const top = topNights(tally(row.options.filter(o => o.date >= todayET()), votes, roster));
+    if (top.length) {
+      const r = await store().update(row.id, row.version, { reminded_at: new Date().toISOString() });
+      if (r) {
+        await push({ title: 'Still need a pick for Survivor night', body: `${leadLine(top, roster.teams.length)}.`, tag: `viewing-${row.id}-pick` },
+          people => people.includes(row.created_by));
+        return { status: 'pick-reminded' };
       }
     }
   }

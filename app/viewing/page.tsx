@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 // link previews show what's going on ("Vote: next Survivor night · Fri, Oct 30 or Sat, Oct 31")
 export async function generateMetadata(): Promise<Metadata> {
   let p = previewLines(null);
-  try { p = previewLines((await getViewingState()).viewing); } catch { /* generic preview */ }
+  try { const st = await getViewingState(); p = previewLines(st.viewing, st.votes, st.roster); } catch { /* generic preview */ }
   const title = p.heading;
   const description = [p.sub, p.detail].filter(Boolean).join(' · ');
   return { title: `${title} · Fantasy Survivor`, description, openGraph: { title, description } };

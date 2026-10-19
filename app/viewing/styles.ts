@@ -2,7 +2,7 @@
 // Colors are the Fantasy Survivor design-system tokens.
 export const VW_CSS = `
 .vw{--bg:#0c0a09;--panel:#1c1917;--sunk:#1f1b19;--panel2:#262220;--line:#2f2a27;--line2:#3a342f;--text:#fafaf9;--soft:#d6d3d1;--muted:#a8a29e;--faint:#78716c;--dim:#57534e;
-  --accent:#f59e0b;--accent2:#f97316;--gold:#fcd34d;--neg:#f87171;
+  --accent:#f59e0b;--accent2:#f97316;--gold:#fcd34d;--neg:#f87171;--pos:#4ade80;
   max-width:560px;margin:0 auto;padding-bottom:48px;color:var(--text)}
 .vw a{color:inherit;text-decoration:none}
 .vw button{font:inherit;color:inherit;cursor:pointer}
@@ -58,6 +58,8 @@ export const VW_CSS = `
 .vw .ans button.y{background:linear-gradient(90deg,var(--accent),var(--accent2));border-color:transparent;color:#1c1917}
 .vw .ans button.m{background:rgba(252,211,77,.12);border-color:var(--gold);color:var(--gold)}
 .vw .ans button.n{background:rgba(248,113,113,.12);border-color:var(--neg);color:var(--neg)}
+.vw .ans button.in{background:rgba(74,222,128,.12);border-color:var(--pos);color:var(--pos)}
+.vw .ans button svg{margin-right:6px;vertical-align:-1px}
 .vw .split{display:flex;gap:8px;margin:10px 14px 0;padding:8px 10px;border-radius:10px;background:var(--panel2);font-size:13px;line-height:1.4;color:var(--soft)}
 .vw .split b{color:var(--text)}
 .vw .more{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:44px;margin-top:8px;padding:0 14px;border:0;border-top:1px solid var(--line);background:none;color:var(--muted);font-size:13px;font-weight:700}
