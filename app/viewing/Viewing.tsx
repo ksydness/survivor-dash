@@ -712,6 +712,8 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
   const [cal, setCal] = useState(false);
   const [moving, setMoving] = useState(false);
   const [showVotes, setShowVotes] = useState(false);
+  const votesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (showVotes) votesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [showVotes]);
   // why this night: its team count, whether it beat the rest, and turnout (only for a night that came from a poll)
   const why = (() => {
     const w = winnerOption(v);
@@ -755,6 +757,20 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
           </div>
         </div>
       </div>
+
+      {showVotes && v.options.length > 0 && (() => {
+        const t = tally(v.options, votes, roster);
+        const picked = winnerOption(v);
+        const missed = roster.voters.map(x => x.name).filter(n => !votes.some(x => x.person === n));
+        return (
+          <div ref={votesRef} className="box" aria-label="How everyone voted" style={{ scrollMarginTop: 12 }}>
+            <div className="hrow"><div className="t">How everyone voted</div><span className="note">needed {bar} of {roster.teams.length} teams</span></div>
+            <div className="s">{v.created_by}’s poll · tap a night to see who said what.</div>
+            <NightRows t={t} votes={votes} roster={roster} me={who?.me ?? null} tag={(row) => (picked && row.option.id === picked.id ? 'Picked' : null)} />
+            {missed.length > 0 && <div className="s" style={{ marginTop: 10 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></div>}
+          </div>
+        );
+      })()}
 
       {moving && (
         <div className="box">
@@ -855,19 +871,6 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
       <button type="button" className="ghost" style={{ marginTop: 14 }} aria-expanded={cal} onClick={() => setCal(x => !x)}>Add to calendar</button>
       {cal && <CalendarBox oneOff />}
     </section>
-    {showVotes && v.options.length > 0 && (() => {
-      const t = tally(v.options, votes, roster);
-      const picked = winnerOption(v);
-      const missed = roster.voters.map(x => x.name).filter(n => !votes.some(x => x.person === n));
-      return (
-        <section className="card" aria-label="How everyone voted">
-          <div className="hrow"><h3 className="eyebrow">How everyone voted</h3><span className="note">needed {bar} of {roster.teams.length} teams</span></div>
-          <p className="note" style={{ marginTop: 4 }}>{v.created_by}’s poll · tap a night to see who said what.</p>
-          <NightRows t={t} votes={votes} roster={roster} me={who?.me ?? null} tag={(row) => (picked && row.option.id === picked.id ? 'Picked' : null)} />
-          {missed.length > 0 && <p className="note" style={{ marginTop: 10 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></p>}
-        </section>
-      );
-    })()}
     <ShareLink text={shareText} />
     {canLock && <button type="button" className="linkbtn danger" onClick={() => { if (confirm(`Cancel ${dayLabel(date)} for everyone?`)) act('cancel', {}, 'Cancelled.'); }}>Cancel this Survivor night</button>}
   </>);
