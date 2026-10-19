@@ -10,6 +10,6 @@ export const dynamic = 'force-dynamic';
 // Link preview for /viewing: the poll's nights and deadline, or the night that's set.
 export default async function Image() {
   let p = previewLines(null);
-  try { p = previewLines((await getViewingState()).viewing); } catch { /* generic card */ }
+  try { const st = await getViewingState(); p = previewLines(st.viewing, st.votes, st.roster); } catch { /* generic card */ }
   return ogCard(p);
 }

@@ -21,11 +21,15 @@ export default function VoteButton({ options, votes }: { options: ViewingOption[
   return <Link className={done ? 'ghostbtn' : 'cta'} style={done ? { marginTop: 14 } : undefined} href="/viewing">{label}</Link>;
 }
 
-/** The homepage's set-night button: "Are you coming?" for a phone whose person hasn't said yet. */
-export function NightButton({ unsure, label }: { unsure: string[]; label: string }) {
+/** The homepage's set-night button: "Are you coming?" until this phone's person answers, then their answer. */
+export function NightButton({ unsure, going, out, label }: { unsure: string[]; going: string[]; out: string[]; label: string }) {
   const [me, setMe] = useState<string | null>(null);
   useEffect(() => {
     try { const w = JSON.parse(localStorage.getItem('survivor-viewer') || 'null'); if (w?.me) setMe(w.me); } catch { /* private mode */ }
   }, []);
-  return <Link className="cta" href="/viewing">{me && unsure.includes(me) ? 'Are you coming?' : label}</Link>;
+  if (me && unsure.includes(me)) return <Link className="cta" href="/viewing">Are you coming?</Link>;
+  const said = me && going.includes(me) ? 'You’re in ✓' : me && out.includes(me) ? 'You can’t make it' : null;
+  // once you've answered it's a status, not a call to action — same quiet button as "See results"
+  if (said) return <Link className="ghostbtn" style={{ marginTop: 14 }} href="/viewing">{said} · Details</Link>;
+  return <Link className="cta" href="/viewing">{label}</Link>;
 }
