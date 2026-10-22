@@ -1,9 +1,12 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { getSeasons, getSeasonPayload, getHistory } from '@/lib/data';
 import { getLiveDraft, liveDraftConfigured, type LiveState } from '@/lib/liveDraft';
 import type { RegistryRow } from '@/lib/sheets';
 import type { SeasonPayload } from '@/lib/types';
-import { colorFor, fmtDelta, historyModel, latestWeek, recap, standings, weekLabel, r2 } from './s/[season]/dash/model';
+import { colorFor, historyModel, latestWeek, recap, standings, weekLabel, r2 } from './s/[season]/dash/model';
+import { parseSeen, revealInfo, seenAsOf, seenCookie, shieldFor } from './s/[season]/dash/spoiler';
+import SeasonCard, { type Frame } from './_home/SeasonCard';
 import PushToggle from './s/[season]/PushToggle';
 import DraftRefresh from './_home/DraftRefresh';
 import ResumeRefresh from './_home/ResumeRefresh';
@@ -23,11 +26,11 @@ export const dynamic = 'force-dynamic';
  */
 
 type Hero =
-  | { kind: 'season'; row: RegistryRow; d: SeasonPayload }
+  | { kind: 'season'; row: RegistryRow; d: SeasonPayload; seen: number | null }
   | { kind: 'draft'; row: RegistryRow; live: LiveState | null }
   | { kind: 'plain'; row: RegistryRow };
 
-async function loadHero(row: RegistryRow): Promise<Hero> {
+async function loadHero(row: RegistryRow, seen: number | null): Promise<Hero> {
   if (row.status === 'drafting') {
     let live: LiveState | null = null;
     if (liveDraftConfigured()) {
@@ -37,7 +40,7 @@ async function loadHero(row: RegistryRow): Promise<Hero> {
   }
   try {
     const d = await getSeasonPayload(row.season);
-    if (d) return { kind: 'season', row, d };
+    if (d) return { kind: 'season', row, d, seen };
   } catch { /* fall back to a plain card with the Open button */ }
   return { kind: 'plain', row };
 }
@@ -63,7 +66,7 @@ export default async function Home() {
   // the season people come for: the newest one that's live or drafting, else the newest one
   const cur = seasons.find(s => s.status === 'active' || s.status === 'drafting') ?? seasons[0] ?? null;
   const [hero, history, viewing] = await Promise.all([
-    cur ? loadHero(cur) : Promise.resolve(null), getHistory(),
+    cur ? loadHero(cur, parseSeen((await cookies()).get(seenCookie(cur.season))?.value)) : Promise.resolve(null), getHistory(),
     // the next watch night (poll / locked) — never blocks the page if the scheduler can't be read
     viewingConfigured() ? getViewingState().catch(() => null) : Promise.resolve(null as ViewingState | null),
   ]);
@@ -84,7 +87,7 @@ export default async function Home() {
         {err && <p className="msg err">{err}</p>}
         {!err && !seasons.length && <p className="msg">No seasons yet. Add a row to the <b>Seasons</b> tab in your sheet.</p>}
 
-        {hero?.kind === 'season' && <SeasonCard row={hero.row} d={hero.d} />}
+        {hero?.kind === 'season' && <ShieldedSeason row={hero.row} d={hero.d} seen={hero.seen} />}
         {hero?.kind === 'draft' && <DraftCard row={hero.row} live={hero.live} />}
         {hero?.kind === 'plain' && (
           <section className="card" aria-labelledby="cur">
@@ -157,63 +160,36 @@ export default async function Home() {
   );
 }
 
-/** The current (or most recent) season: recap headline, mini standings, Open button, then the week's details. */
-function SeasonCard({ row, d }: { row: RegistryRow; d: SeasonPayload }) {
-  const name = seasonName(row);
-  const active = d.meta.status === 'active';
-  const lw = latestWeek(d);
-  const rc = recap(d);
-  const rows = standings(d);
-  const href = `/s/${row.season}`;
-  const alive = d.contestants.filter(c => !c.eliminated).length;
-  const topTeam = rc?.topTeam;
+/** One card frame: the season as of scored_weeks position k (what standings()/recap() say there). */
+function frameOf(d: SeasonPayload, k: number, seen: number): Frame {
+  const v = seenAsOf(d, k);
+  const active = v.meta.status === 'active';
+  const lw = latestWeek(v);
+  const rc = recap(v);
+  const tt = rc?.topTeam;
+  return {
+    week: lw !== null ? weekLabel(v, lw) : null,
+    seen,
+    headline: rc?.headline ?? (active ? 'No scores posted yet' : 'Season complete'),
+    rows: standings(v),
+    body: rc?.body || null,
+    topTeam: tt ? { label: rc!.final ? `Week ${rc!.week} top team` : 'Top team this week', names: tt.names.length > 2 ? `${tt.names.length}-way tie` : tt.names.join(' & '), pts: tt.pts } : null,
+    alive: v.contestants.filter(c => !c.eliminated).length,
+    cast: v.contestants.length,
+  };
+}
+
+/** The current season behind the spoiler shield: what this phone has revealed, then each hidden week. */
+function ShieldedSeason({ row, d, seen }: { row: RegistryRow; d: SeasonPayload; seen: number | null }) {
+  const sh = shieldFor(d, seen);
+  const sw = d.meta.scored_weeks ?? [];
+  const label = (k: number) => (k >= 0 ? weekLabel(d, sw[k]) : 0);
+  const ks = [sh.k, ...sh.hidden];
+  const frames = d.meta.status === 'active' ? ks.map(k => frameOf(d, k, label(k))) : [frameOf(d, sw.length - 1, label(sw.length - 1))];
+  const reveals = d.meta.status === 'active' ? sh.hidden.map(k => revealInfo(d, k)) : [];
   return (
-    <section className="card" aria-labelledby="cur">
-      <div className="hrow">
-        <h2 id="cur" className="eyebrow">{name}{lw !== null ? ` · Week ${weekLabel(d, lw)}` : ''}</h2>
-        {active ? <span className="pill"><i />Live</span> : <span className="pill done"><i />Final</span>}
-      </div>
-      <p className="headline">{rc?.headline ?? (active ? 'No scores posted yet' : 'Season complete')}</p>
-
-      <div className="rows">
-        {rows.map(t => {
-          const mv = t.move === null ? null : t.move > 0 ? { c: 'up', txt: `▲${t.move}`, sr: `up ${t.move}` } : t.move < 0 ? { c: 'down', txt: `▼${-t.move}`, sr: `down ${-t.move}` } : { c: '', txt: '–', sr: 'no change' };
-          const rankTxt = t.tied ? `T-${t.rank}` : String(t.rank);
-          const label = `${t.team}, ${t.tied ? `tied for ${t.rank === 1 ? '1st' : `rank ${t.rank}`}` : `rank ${t.rank}`}, ${t.total} points${t.week !== null ? `, ${fmtDelta(t.week)} this week` : ''}, ${t.left} of ${t.size} players left${mv ? `, ${mv.sr} since last week` : ''}. Open in Teams`;
-          return (
-            <Link key={t.team} className="row" href={`${href}?tab=teams&team=${encodeURIComponent(t.team)}`} aria-label={label}>
-              <span className="rk" aria-hidden>
-                <b className={t.rank === 1 ? 'first' : ''}>{rankTxt}</b>
-                {mv && <span className={`mv ${mv.c}`}>{mv.txt}</span>}
-              </span>
-              <span className="who" aria-hidden>
-                <span className="tn"><span className="dot" style={{ background: t.color }} /><span>{t.team}{!active && t.rank === 1 ? ' 👑' : ''}</span></span>
-                <span className="sub">
-                  <span className="pips">{Array.from({ length: t.size }, (_, i) => <span key={i} className="pip" style={i < t.left ? { background: t.color, borderColor: t.color } : undefined} />)}</span>
-                  {t.left} of {t.size} left
-                </span>
-              </span>
-              <span className="pts" aria-hidden>
-                <b className="num">{t.total}</b>
-                {t.week !== null ? <span className={`num ${t.week < 0 ? 'neg' : ''}`}>{fmtDelta(t.week)} this wk</span>
-                  : t.rank === 1 && !t.tied ? <span>{active ? 'Leader' : 'Champion'}</span>
-                    : <span className="num">{t.back} back</span>}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-
-      <Link className="cta" href={href}>Open {name}<Chevron /></Link>
-
-      {rc?.body && <p className="after">{rc.body}</p>}
-      {(topTeam || d.contestants.length > 0) && (
-        <div className="facts">
-          {topTeam && <span>{rc!.final ? `Week ${rc!.week} top team` : 'Top team this week'}: <b>{topTeam.names.length > 2 ? `${topTeam.names.length}-way tie` : topTeam.names.join(' & ')}</b>{topTeam.pts != null ? ` · ${topTeam.pts} pts` : ''}</span>}
-          {d.contestants.length > 0 && <span className="num">{alive} of {d.contestants.length} still in</span>}
-        </div>
-      )}
-    </section>
+    <SeasonCard key={`${frames[0].seen}-${frames.length}`} season={row.season} name={seasonName(row)} active={d.meta.status === 'active'}
+      frames={frames} reveals={reveals} hadCookie={seen !== null} />
   );
 }
 

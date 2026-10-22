@@ -5,7 +5,7 @@ export const alt = 'Season preview — Fantasy Survivor';
 export const size = OG_SIZE;
 export const contentType = 'image/png';
 
-// Per-season preview: draft in progress, current leader, or champion.
+// Per-season preview: draft in progress, live (no leader — spoiler shield), or champion.
 export default async function Image({ params }: { params: Promise<{ season: string }> }) {
   const { season } = await params;
   const n = parseInt(season, 10);
@@ -17,6 +17,12 @@ export default async function Image({ params }: { params: Promise<{ season: stri
       return ogCard({ heading, sub: `${OG_BRAND.name} · Live Draft`, detail: 'Draft in progress — tap to join' });
     }
     const p = await getSeasonPayload(n);
+    if (row.status !== 'final') {
+      // live season: no leader here — link previews show up in the group text before everyone has watched
+      const sw = p?.meta.scored_weeks ?? [];
+      const wk = sw.length ? (p!.meta.week_labels?.[sw[sw.length - 1]] ?? sw[sw.length - 1] + 1) : null;
+      return ogCard({ heading, sub: `${OG_BRAND.name} · Live standings`, detail: wk != null ? `Scores through Week ${wk} · no spoilers` : 'No scores yet' });
+    }
     const lead = p?.teamTotals[0];
     const firsts = (p?.teamTotals ?? []).filter(t => t.rank === 1);
     const final = row.status === 'final';

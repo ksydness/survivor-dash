@@ -9,7 +9,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { LEAGUE, SUPABASE_URL } from './draftConfig';
 import { VAPID_PUBLIC_KEY, PUSH_SUBJECT } from './pushConfig';
 import type { SeasonPayload } from './types';
-import { recap } from '../app/s/[season]/dash/model';
 
 export interface PushSub { endpoint: string; keys: { p256dh: string; auth: string } }
 export interface PushMessage { title: string; body: string; url: string; tag: string }
@@ -91,7 +90,7 @@ export async function sendToLeague(msg: PushMessage, season: number, week: numbe
   return { devices: subs.length, sent, removed: dead.length, failed };
 }
 
-// ── message ────────────────────────────────────────────────────────────────
+// ── message ─────────────────────────────────────────────────────────────────────────
 
 /** Latest scored week as the sheet numbers it (matches the dashboard's "Through Week N"). */
 export function latestWeek(d: SeasonPayload): { index: number; label: number } | null {
@@ -101,16 +100,17 @@ export function latestWeek(d: SeasonPayload): { index: number; label: number } |
   return { index, label: d.meta.week_labels?.[index] ?? index + 1 };
 }
 
-/** "Week 3 scores are in" + the homepage's one-line recap — tapping opens the dashboard (Leaderboard tab, freshly synced). */
+/**
+ * "Week 3 scores are in" — and nothing else: pings land on lock screens, and some people watch later
+ * (the spoiler shield). Tapping opens the dashboard (freshly synced), where they tap Reveal when ready.
+ */
 export function buildScoreMessage(d: SeasonPayload): PushMessage | null {
   const lw = latestWeek(d);
   if (!lw) return null;
-  const rc = recap(d);
-  const first = rc?.body.split(/(?<=\.)\s+/)[0];
   return {
     // no emoji prefix: the notification already shows the app's 🔥 icon
     title: `Week ${lw.label} scores are in`,
-    body: rc ? `${rc.headline}.${first ? ` ${first}` : ''}` : 'Tap to see the leaderboard.',
+    body: 'No spoilers here — open it when you\'ve watched.',
     url: `/s/${d.meta.season}?sync=1`,
     tag: `scores-${d.meta.season}-${lw.label}`,
   };
