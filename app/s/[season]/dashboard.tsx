@@ -4,13 +4,15 @@
 // tabs. Each tab shows the answer people come for up top; deeper data sits one tap away.
 // Design reference: the "Survivor Dash — UX Mockups" canvas + the Fantasy Survivor design system.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import PushToggle from './PushToggle';
 import { usePullRefresh } from '../../PullToRefresh';
 import { CSS } from './dash/styles';
 import { IconBack, IconNext, IconPrev, IconRefresh, IconRules } from './dash/bits';
 import { asOf, weekLabel } from './dash/model';
+import { readSeen, revealInfo, shieldFor, shielded, writeSeen, type RevealInfo } from './dash/spoiler';
+import RevealSplash, { SHIELD_CSS } from '../../RevealSplash';
 import Leaderboard from './dash/Leaderboard';
 import Teams from './dash/Teams';
 import Contestants from './dash/Contestants';
@@ -34,6 +36,16 @@ export default function Dashboard({ season }: { season: number }) {
   const [view, setView] = useState<number | null>(null);  // position in scored_weeks; null = latest
   const [hint, setHint] = useState<string | null>(null);
   const tabsRef = useRef<HTMLElement | null>(null);
+  const [seenTick, setSeenTick] = useState(0);  // bumps after a reveal so the cookie is re-read
+  const [splash, setSplash] = useState<RevealInfo | null>(null);
+
+  // spoiler shield: a live season only shows the weeks this phone has revealed (see dash/spoiler.ts)
+  const shield = useMemo(() => (data?.meta ? shieldFor(data, readSeen(season)) : null), [data, season, seenTick]);
+  const base = useMemo(() => (data?.meta && shield ? shielded(data, shield) : data), [data, shield]);
+  useEffect(() => {
+    // first visit on this phone: remember "everything but the newest week" so it doesn't slip through later
+    if (data?.meta?.status === 'active' && shield && readSeen(season) == null) writeSeen(season, shield.seen);
+  }, [data, shield, season]);
 
   // keep the active tab visible in the swipeable row (e.g. opening ?tab=history on a phone)
   useEffect(() => {
@@ -72,12 +84,12 @@ export default function Dashboard({ season }: { season: number }) {
 
   // ?week=N opens the dashboard rewound to that sheet week (shareable link)
   useEffect(() => {
-    if (!data?.meta) return;
+    if (!base?.meta) return;
     const w = parseInt(new URLSearchParams(window.location.search).get('week') || '', 10);
-    const sw = data.meta.scored_weeks ?? [];
-    const k = Number.isFinite(w) ? sw.findIndex(i => weekLabel(data, i) === w) : -1;
+    const sw = base.meta.scored_weeks ?? [];
+    const k = Number.isFinite(w) ? sw.findIndex(i => weekLabel(base, i) === w) : -1;
     setView(k >= 0 && k < sw.length - 1 ? k : null);
-  }, [data]);
+  }, [base]);
 
   function setParam(key: string, value: string | null) {
     const url = new URL(window.location.href);
@@ -92,8 +104,8 @@ export default function Dashboard({ season }: { season: number }) {
   }
   function goTo(k: number | null) {
     setView(k);
-    const sw = data?.meta.scored_weeks ?? [];
-    setParam('week', k === null || k >= sw.length - 1 ? null : String(weekLabel(data!, sw[k])));
+    const sw = base?.meta.scored_weeks ?? [];
+    setParam('week', k === null || k >= sw.length - 1 ? null : String(weekLabel(base!, sw[k])));
   }
 
   const title = data?.meta?.name || `Season ${season}`;
@@ -108,7 +120,7 @@ export default function Dashboard({ season }: { season: number }) {
     </header>
   );
 
-  if (loading || !data?.meta) return (
+  if (loading || !data?.meta || !base) return (
     <div className="dash">
       <style>{CSS}</style>
       {appBar}
@@ -120,16 +132,23 @@ export default function Dashboard({ season }: { season: number }) {
     </div>
   );
 
-  const sw = data.meta.scored_weeks ?? [];
+  const sw = base.meta.scored_weeks ?? [];
   const last = sw.length - 1;
   const k = view === null ? last : Math.min(view, last);
-  const v = view === null ? data : asOf(data, k);  // what every tab renders
+  const v = view === null ? base : asOf(base, k);  // what every tab renders
+  const nextHidden = shield?.on ? shield.hidden[0] : null;
+  function revealed() {
+    if (splash) writeSeen(season, splash.week);
+    setSplash(null);
+    setSeenTick(t => t + 1);
+    goTo(null);
+  }
   const tabs = TABS.filter(([id]) => id !== 'draft' || !!data.draft);
   const cur: Tab = tab === 'draft' && !data.draft ? 'leaderboard' : tab;
   const live = data.meta.status === 'active' && k === last;
   const label = sw.length === 0 ? 'No episodes scored yet'
     : k === last && data.meta.status === 'final' ? 'Final standings'
-    : <>Week {weekLabel(data, sw[k])} <span className="muted" style={{ fontWeight: 600 }}>of {weekLabel(data, sw[last])}</span></>;
+    : <>Week {weekLabel(base, sw[k])} <span className="muted" style={{ fontWeight: 600 }}>of {weekLabel(base, sw[last])}</span></>;
 
   return (
     <div className="dash">
@@ -142,7 +161,18 @@ export default function Dashboard({ season }: { season: number }) {
           <div className="lbl" aria-live="polite">{label}{live && <span className="live">Live</span>}{k < last && <span className="sr"> (earlier week)</span>}</div>
           <button type="button" className="iconbtn" aria-label="Next week" disabled={sw.length === 0 || k >= last} onClick={() => goTo(k + 1 >= last ? null : k + 1)}><IconNext /></button>
         </nav>
-        {k < last && <button type="button" className="latest" onClick={() => goTo(null)}>Back to latest (Week {weekLabel(data, sw[last])}) »</button>}
+        {k < last && <button type="button" className="latest" onClick={() => goTo(null)}>Back to latest (Week {weekLabel(base, sw[last])}) »</button>}
+        {nextHidden !== null && (
+          <div className="shieldbar" role="region" aria-label="Spoiler shield">
+            <style>{SHIELD_CSS}</style>
+            <span className="sic" aria-hidden>🔥</span>
+            <span className="stx">
+              <b>Week {weekLabel(data, (data.meta.scored_weeks ?? [])[nextHidden])} scores are in</b>
+              <span>{last >= 0 ? `Showing through Week ${weekLabel(base, sw[last])}.` : 'Nothing shown yet.'} Watched it?</span>
+            </span>
+            <button type="button" className="sbtn" onClick={() => setSplash(revealInfo(data, nextHidden))}>Reveal</button>
+          </div>
+        )}
 
         <div className="tabsbar">
           <nav className="tabs" aria-label="Dashboard sections" ref={tabsRef}>
@@ -161,6 +191,7 @@ export default function Dashboard({ season }: { season: number }) {
           {cur === 'history' && <History d={v} />}
         </main>
       </div>
+      {splash && <RevealSplash info={splash} onDone={revealed} />}
     </div>
   );
 }
