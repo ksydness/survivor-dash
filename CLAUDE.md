@@ -211,7 +211,7 @@ tab gets install instructions instead. The button hides itself until `VAPID_PRIV
   key is asked once and kept in Script Properties. Retroactive Update never notifies.
 - **Route** `app/api/push/notify`: key = `COMMISSIONER_KEY`; season defaults to the newest
   `active` registry row; week read via `getSeasonPayload` (lib/data.ts, no re-scoring). The message
-  is short: "Week 3 scores are in" + the homepage recap's headline and first sentence (no 🔥 — the icon is one); tapping
+  is spoiler-free (2026-10-22): "Week 3 scores are in" / "No spoilers here — open it when you've watched." (no 🔥 — the icon is one); tapping
   opens `/s/<n>?sync=1`, which the dashboard treats as a Refresh (bypasses the 3-min cache) and
   then strips from the URL. Each `(league, season, week)` is sent once (`push_sends` table).
   `GET /api/push/notify?season=N` previews the message without sending.
@@ -330,7 +330,7 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
     reminder add "You said Maybe — are you in?" for not-sure phones; the homepage button says "Are you coming?".
     Older rows (no `rsvp`) fall back to poll votes + `drops`.
   - Push copy: no 🔥 prefix (the icon is one); titles carry the news, bodies one detail (see `push(` calls).
-    Score pings: "Week N scores are in" + the homepage recap headline (`lib/push.ts` — diverges from bakeoff-dash).
+    Score pings: "Week N scores are in" + a no-spoilers line (`lib/push.ts` — diverges from bakeoff-dash; see Spoiler shield).
     Local dev prints every voter's would-be ping as `[push] Name: title | body` instead of sending.
   - Small "Share with the group text" link (share sheet / copy) under the poll, results and set night; `/viewing`
     has a live link preview (`previewLines` → `generateMetadata` + `app/viewing/opengraph-image.tsx`).
@@ -353,6 +353,30 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   store, setup in its docstring): starts a poll through the form, votes as Karina / Kenny (+ proxy for Lena),
   tie → pick step, See the votes, I'm in / Can't make it (incl. the homepage label after Home and after a back
   gesture), where, move, calendar, cancel, add a date. It fails if a tap's result isn't on screen.
+
+## Spoiler shield (2026-10-22)
+
+Kenny sometimes watches and scores an episode before everyone else. A **live** season never shows a phone
+weeks it hasn't revealed: each phone keeps the last sheet week it revealed in the cookie `survivor-seen-s<n>`
+(1 year, path /). No cookie yet = everything but the newest scored week (written on first visit, so a first
+visit never spoils the newest week either). Final seasons aren't shielded. Nothing is re-scored — the shield
+is the week stepper's `asOf()`, wrapped by `seenAsOf()` for k = -1 ("nothing yet") and for an Out week typed
+ahead of the scores at the latest week (that player still counts as in).
+
+- `app/s/[season]/dash/spoiler.ts` — cookie read/write (never moves backwards), `shieldFor(d, seen)`,
+  `seenAsOf`, `shielded(d, s)`, `revealInfo(d, k)` (headline, who went out, top scorer/team for the splash).
+  The strip's CSS is `SHIELD_CSS` in `app/RevealSplash.tsx` (shared by both pages).
+- **Homepage**: `app/page.tsx` reads the cookie (`next/headers`) and renders `_home/SeasonCard.tsx` (client) with
+  one frame per week the phone can step through. While weeks are hidden, the headline slot becomes a
+  "Week N scores are in · Reveal" strip (Open button still above the SE fold: 517px at 375×548). Reveal →
+  `app/RevealSplash.tsx` ("Reading the votes…" beat, then headline / The tribe has spoken / top scorer / top
+  team) → rows slide (FLIP) and totals count up to the new week; cookie moves forward. One week per reveal.
+- **Dashboard**: the whole payload goes through `shielded()` before the week stepper, so every tab,
+  `?week=N` and "of Week N" stop at the last revealed week; the same strip + splash sit under the week bar.
+- **Push**: no recap in the body. **Link preview** (`app/s/[season]/opengraph-image.tsx`): live seasons say
+  "Scores through Week N · no spoilers", no leader.
+- An Out cell without a week number ("x") can't be shielded (no week to hide it behind) — type the week.
+- Not built (Kenny liked the reveal being the fun part): auto-reveal for people who were at a Survivor night.
 
 ## Environment variables (set in Vercel dashboard)
 
