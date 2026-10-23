@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import { Disclosure, Dot } from './bits';
-import { colorFor, r2, teamIndex, teamWeekPts, weekLabel } from './model';
+import { colorFor, r2, teamWeekPts, weekLabel } from './model';
 
 /** Stats: four headline numbers up top; the heatmap, weekly totals and records behind "Dig deeper". */
 export default function Stats({ d }: { d: SeasonPayload }) {
@@ -28,8 +28,8 @@ export default function Stats({ d }: { d: SeasonPayload }) {
         <div className="tile">
           <div className="k">{coLeaders.length > 1 ? (final ? 'Co-champions' : 'Tied for 1st') : final ? 'Champion' : 'Leader'}</div>
           {coLeaders.length > 1
-            ? <div className="v sm">{coLeaders.map((t, i) => <span key={t.team} style={{ display: 'block', color: colorFor(t.team, i) }}>{t.team}</span>)}</div>
-            : <div className="v sm" style={{ color: leader ? colorFor(leader.team, 0) : undefined }}>{leader?.team ?? '—'}</div>}
+            ? <div className="v sm">{coLeaders.map((t, i) => <span key={t.team} style={{ display: 'block', color: colorFor(t.team) }}>{t.team}</span>)}</div>
+            : <div className="v sm" style={{ color: leader ? colorFor(leader.team) : undefined }}>{leader?.team ?? '—'}</div>}
           <div className="d">{!leader ? '' : coLeaders.length > 1
             ? `${leader.total} pts each${second ? ` · ${r2(leader.total - second.total)} ahead of ${second.team}` : ''}`
             : `${leader.total} pts${second ? ` · ${r2(leader.total - second.total)} ahead` : ''}`}</div>
@@ -58,7 +58,7 @@ export default function Stats({ d }: { d: SeasonPayload }) {
         </Disclosure>
         <Disclosure title="League points per week" sub="How big each episode was, split by team">
           <WeeklyStack d={d} />
-          <div className="legend">{tt.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team, i)} />{t.team}</div>)}</div>
+          <div className="legend">{tt.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team)} />{t.team}</div>)}</div>
         </Disclosure>
         <Disclosure title="More records" sub="Margins, totals and negative weeks">
           <div className="rows">
@@ -76,7 +76,6 @@ export default function Stats({ d }: { d: SeasonPayload }) {
 
 function Heatmap({ d, best }: { d: SeasonPayload; best: { p: string; v: number } }) {
   const sw = d.meta.scored_weeks ?? [];
-  const idx = teamIndex(d);
   const bestWk = best;
   const rows = [...d.contestants].sort((a, b) => b.total - a.total);
   const firstPick = bestWk.p ? { n: bestWk.p, i: sw.find(i => (d.contestants.find(c => c.name === bestWk.p)?.weeks[i] ?? 0) === bestWk.v) ?? sw[0] } : null;
@@ -96,7 +95,7 @@ function Heatmap({ d, best }: { d: SeasonPayload; best: { p: string; v: number }
       <div style={{ display: 'grid', gap: 2, marginTop: 2 }}>
         {rows.map(c => (
           <div key={c.name} className="heatrow" style={{ ['--w' as string]: sw.length }}>
-            <span className={`hn ${c.eliminated ? 'out' : ''}`}><i style={{ background: colorFor(c.team, idx[c.team] ?? 0) }} />{c.name}</span>
+            <span className={`hn ${c.eliminated ? 'out' : ''}`}><i style={{ background: colorFor(c.team) }} />{c.name}</span>
             {sw.map(i => {
               const v = c.weeks[i] ?? 0;
               return <button key={i} type="button" className="hc" style={{ background: bg(v) }}
@@ -121,7 +120,7 @@ function Heatmap({ d, best }: { d: SeasonPayload; best: { p: string; v: number }
 function WeeklyStack({ d }: { d: SeasonPayload }) {
   const sw = d.meta.scored_weeks ?? [];
   const tt = d.teamTotals;
-  const cols = sw.map(i => ({ i, segs: tt.map((t, k) => ({ c: colorFor(t.team, k), v: Math.max(0, teamWeekPts(d, t.team, i)) })) }))
+  const cols = sw.map(i => ({ i, segs: tt.map((t, k) => ({ c: colorFor(t.team), v: Math.max(0, teamWeekPts(d, t.team, i)) })) }))
     .map(c => ({ ...c, total: r2(c.segs.reduce((a, s) => a + s.v, 0)) }));
   const mx = Math.max(...cols.map(c => c.total), 1);
   return (
