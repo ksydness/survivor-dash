@@ -13,7 +13,7 @@ export default function ViewingCard({ st }: { st: ViewingState }) {
   const snap = { viewing: st.viewing, votes: st.votes, roster, now: st.now };
   const dots = (inTeams: string[]) => (
     <span className="vdots" role="img" aria-label={`${inTeams.length} of ${roster.teams.length} teams in`}>
-      {roster.teams.map((t, i) => <i key={t} style={inTeams.includes(t) ? { background: colorFor(t, i), borderColor: colorFor(t, i) } : undefined} />)}
+      {roster.teams.map((t, i) => <i key={t} style={inTeams.includes(t) ? { background: colorFor(t), borderColor: colorFor(t) } : undefined} />)}
     </span>
   );
 
