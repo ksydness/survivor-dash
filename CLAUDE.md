@@ -238,10 +238,10 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   the first night.
 - **Locking** (rules changed 2026-10-18, Kenny's call): the poll is checked at the deadline or the moment every
   voter has answered every option. It **locks itself only when everyone voted AND one night clearly wins**
-  (`clearWinner`: clears the bar with more teams saying Yes than any other night — the Maybe tiebreak only orders
-  the list). Anything else closes it (status `closed`): if a night cleared the bar (`topNights`) it's
+  (clear winner: clears the bar with more teams saying Yes than any other night — the Maybe tiebreak only orders
+  the list). Anything else closes it (status `closed`): if a night from today on cleared the bar (phase `needs-pick`) it's
   **"Votes are in — Karina picks the night"** — Pick buttons on the clearing nights for the starter/commissioner,
-  everyone else sees who picks, the lead/tie (`leadLine`), turnout and who didn't vote; push: starter's phone
+  everyone else sees who picks, the lead/tie (`leadLine`), turnout and who didn't finish voting; push: starter's phone
   "pick the Survivor night", others "<starter> picks …"; if nobody picks, the hourly tick reminds the starter's
   phones once at 10 AM ET the next day (`reminded_at`, reset on close/reopen; needs `updated_at` in COLS).
   If no night cleared → the old "No night got 3 of 4 teams" screen (Lock anyway / add nights & reopen / add a
@@ -318,7 +318,7 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
     Someone whose votes were cast for them sees "<Tony> answered for you — Looks right" (re-saves them as their
     own) instead of landing on the results.
   - **Maybe breaks ties**: rank = most teams with a Yes → most teams with a Yes or Maybe → most Yes → most Maybe →
-    earliest (`tally`, `teamsMaybe`); maybe-only teams show as half-filled dots.
+    earliest (`tally` inside `situation()`, `teamsMaybe`); maybe-only teams show as half-filled dots.
   - Episodes stepper only for the starter / commissioner; everyone else sees "2 episodes".
   - **Set nights track who's coming** (`viewings.rsvp` jsonb: `{ name: { s: in|out|unsure, by, at, said, prev } }`),
     written out for every voter when the night is set: Yes → in, No → out, Maybe / no vote → not sure ("said
@@ -333,7 +333,7 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
     Score pings: "Week N scores are in" + a no-spoilers line (`lib/push.ts` — diverges from bakeoff-dash; see Spoiler shield).
     Local dev prints every voter's would-be ping as `[push] Name: title | body` instead of sending.
   - Small "Share with the group text" link (share sheet / copy) under the poll, results and set night; `/viewing`
-    has a live link preview (`previewLines` → `generateMetadata` + `app/viewing/opengraph-image.tsx`).
+    has a live link preview (`situation().preview` → `generateMetadata` + `app/viewing/opengraph-image.tsx`).
   - Copy no longer promises pings (most phones don't have notifications on yet).
 - **Timed steps** run in `tick()` (`/api/viewing/tick`, idempotent, safe to call any time — no secret):
   a Supabase **pg_cron** job `survivor-viewing-tick` calls it hourly at :05 via pg_net. Every page load also
@@ -343,13 +343,25 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   and `viewing_votes` (viewing_id, option_id, person, answer y/m/n, cast_by) in **bakeoff-drafts**, RLS on,
   no policies (service role only). Preview deployments have no service key today, so `/viewing` there
   says "not connected"; if one is ever added, previews use league `survivor-preview` and never send pushes.
-- Files: `lib/viewingModel.ts` (types, Eastern-time helpers, tally — shared with the client),
+- **The situation (`lib/viewingSituation.ts`, 2026-10-23)** — the one place the poll rules live. `situation({ viewing,
+  votes, roster, today, people?, commissioner? })` returns exactly one phase — `none` / `voting` / `needs-pick` /
+  `no-night` / `set` — with only the facts that apply (ranked nights, who it's waiting on, the voted count, clear
+  winner, top nights, who's coming, why this night won, this phone's own part, `mayAct`) plus the sentences shown in
+  more than one place (`leadLine`, `summary`, `why`, `preview`). The page, homepage card + buttons, link preview,
+  `finalizeIfDue`, `tick` and `act`'s permission check all read it; `tally`/`topNights`/`clearWinner`/`leadLine`/
+  `waitingOn` are private to it. Rules: a closed poll only counts nights from **today on**; **"voted" = answered
+  every night** (else "Didn't finish voting"); may act = the starter on their own phone, or the commissioner. Pure:
+  callers pass `today` (the client uses `todayET(new Date(st.now))` — the server's clock) and whether the key checked
+  out. Tests: `lib/viewingSituation.test.ts` (Vitest, `npm test`) — go through `situation()` only. Vocabulary:
+  `GLOSSARY.md`.
+- Files: `lib/viewingModel.ts` (types, Eastern-time helpers, set-night answers — shared with the client),
+  `lib/viewingSituation.ts` (the situation, above),
   `lib/viewing.ts` (store, roster, actions, pushes, tick), `app/api/viewing/{route,tick/route,ics/route}.ts`,
   `app/viewing/{page,Viewing,styles}.tsx|ts`, homepage card `app/_home/ViewingCard.tsx` (below the season
   card so "Open Season N" stays above the fold).
 - Local dev without the service key: `VIEWING_DEV_MEMORY=1 npx next dev` uses an in-memory store
   (never in production).
-- **Before pushing any viewing / homepage-card change, run `scripts/e2e-viewing.py`** (Playwright, in-memory
+- **Before pushing any viewing / homepage-card change, run `npm test` and `scripts/e2e-viewing.py`** (Playwright, in-memory
   store, setup in its docstring): starts a poll through the form, votes as Karina / Kenny (+ proxy for Lena),
   tie → pick step, See the votes, I'm in / Can't make it (incl. the homepage label after Home and after a back
   gesture), where, move, calendar, cancel, add a date. It fails if a tap's result isn't on screen.
