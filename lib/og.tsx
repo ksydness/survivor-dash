@@ -7,17 +7,8 @@ import { ImageResponse } from 'next/og';
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_BRAND = { emoji: '🔥', name: 'Fantasy Survivor', tagline: 'Friends League · Dashboard & Draft Hub' };
 
-const TEAM_COLORS: Record<string, string> = {
-  'Kenny + Lena': '#fb7185',
-  'Tony + Karina': '#f59e0b',
-  'Megan + Jake': '#2dd4bf',
-  'Will + Kathleen + Anna': '#a78bfa',
-  'Will': '#a78bfa',
-  'Megan + Jake + Colt': '#2dd4bf',
-  'Will + Kathleen + Anna + Dan': '#a78bfa',
-};
-const FALLBACK = ['#fb7185', '#f59e0b', '#2dd4bf', '#a78bfa', '#60a5fa', '#f472b6'];
-export const ogTeamColor = (team: string, i = 0) => TEAM_COLORS[team] ?? FALLBACK[i % FALLBACK.length];
+/** Team colors come from lib/teamColors.ts, same as every other screen. */
+export { colorFor as ogTeamColor } from './teamColors';
 
 export function ogCard(opts: { heading: string; sub?: string; detail?: string; detailColor?: string }) {
   const { heading, sub, detail, detailColor } = opts;

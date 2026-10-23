@@ -13,7 +13,7 @@ export default function Draft({ d }: { d: SeasonPayload }) {
   const firstReal = steal?.p ?? picks.find(p => p.c) ?? null;
   const [selPick, setSelPick] = useState<number | null>(firstReal?.pick ?? null);
   const sel = picks.find(p => p.pick === selPick) ?? null;
-  const color = (i: number) => colorFor(b.teams[i], i);
+  const color = (i: number) => colorFor(b.teams[i]);
   const scored = picks.filter(p => p.c);
   const maxPts = Math.max(...scored.map(p => p.c!.total), 1);
   // scale the points axis to the actual scores (early season ≈ 10s, late season ≈ 200s)

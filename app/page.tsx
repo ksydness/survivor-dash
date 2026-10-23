@@ -247,7 +247,7 @@ function DraftCard({ row, live }: { row: RegistryRow; live: LiveState | null }) 
         <div className="rows" style={{ marginTop: 14 }}>
           {listed.map(i => {
             const mine = picks.filter(p => p.teamIndex === i);
-            const color = colorFor(teams[i], i);
+            const color = colorFor(teams[i]);
             return (
               <div key={teams[i]} className="drow">
                 <span className="tn">

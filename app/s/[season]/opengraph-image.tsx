@@ -33,7 +33,7 @@ export default async function Image({ params }: { params: Promise<{ season: stri
       heading,
       sub: `${OG_BRAND.name} · ${final ? 'Final standings' : 'Live standings'}`,
       detail,
-      detailColor: lead ? ogTeamColor(lead.team, 0) : undefined,
+      detailColor: lead ? ogTeamColor(lead.team) : undefined,
     });
   } catch {
     return ogCard({ heading: OG_BRAND.name, sub: `Season ${n}` });

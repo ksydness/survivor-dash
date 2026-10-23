@@ -34,7 +34,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
                 <div className="mini">
                   <div className="k">{rc.final ? `Wk ${rc.week} top team` : 'Top team'}</div>
                   <div className="v">
-                    {rc.topTeam.names.length === 1 && <Dot c={colorFor(rc.topTeam.names[0], d.teamTotals.findIndex(t => t.team === rc.topTeam!.names[0]))} />}
+                    {rc.topTeam.names.length === 1 && <Dot c={colorFor(rc.topTeam.names[0])} />}
                     {rc.topTeam.names.length > 2 ? `${rc.topTeam.names.length}-way tie` : rc.topTeam.names.join(' & ')}
                   </div>
                   <div className="d">{rc.topTeam.pts ?? '—'} pts that week</div>
@@ -108,7 +108,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
           <h2 className="ph" style={{ marginBottom: 12 }}>Rank through the season</h2>
           <RankChart d={d} />
           <div className="legend">
-            {d.teamTotals.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team, i)} />{t.team}</div>)}
+            {d.teamTotals.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team)} />{t.team}</div>)}
           </div>
         </section>
       )}
@@ -153,7 +153,7 @@ function RankChart({ d }: { d: SeasonPayload }) {
           return y(r) + (same.length > 1 ? (same.indexOf(team) - (same.length - 1) / 2) * 5 : 0);
         };
         const pts = arr.map((r, i) => `${x(i).toFixed(1)},${yy(r, i).toFixed(1)}`).join(' ');
-        const c = colorFor(team, ti);
+        const c = colorFor(team);
         const last = arr.length - 1;
         return (
           <g key={team}>

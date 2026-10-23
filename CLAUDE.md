@@ -103,9 +103,9 @@ visibly starts) and buzz-only — it never auto-picks; the commissioner can paus
 for a stalled team, or reset. Confetti + copy-paste exports (Contestants + Draft tabs) on
 completion. Device roles are kept in `localStorage` (`survivor-live-role-s<n>`,
 `survivor-commish-key`). Picks are honor-system (no per-team auth) — accepted for a friends league.
-- **New teams**: just the `team` column on the Contestants tab — no separate setup. Team colors are
-  auto-assigned in `dash/model.ts` (`TEAM_COLORS` has nice presets + a fallback palette; add a
-  name there only if you want a specific color).
+- **New teams**: just the `team` column on the Contestants tab — no separate setup. Team colors come
+  from `lib/teamColors.ts` (see Key architecture decisions) — a renamed or grown team keeps its color
+  automatically; add a preset only for a brand-new team that should have a specific color.
 - **Change scoring**: edit the **Scoring** tab and re-run *Update Scores* in the sheet. The app
   reads the computed results, so no app change is needed.
 
@@ -434,8 +434,12 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
   peer-dep conflict (same as geosports).
 - **No Vercel cron.** Reads are on-demand + cached, so `vercel.json` has no cron. The viewing scheduler's
   hourly tick runs from Supabase pg_cron instead (see Viewing nights).
-- **Team colors** are presets + a fallback palette in `dash/model.ts`; new team names render fine
-  without a code change.
+- **Team colors** live in one module, `lib/teamColors.ts` (2026-10-23), used by every screen — dashboard,
+  homepage, draft room, Survivor night and the link-preview images (`dash/model.ts` and `lib/og.tsx` re-export
+  it). `colorFor(team)` depends only on the name: a preset, else the preset team sharing the most people
+  ("Megan + Jake + Colt" → teal, "Will" → purple), else a spare color picked from the name. No position
+  argument — the old index fallback gave one team different colors on different screens. Tests:
+  `lib/teamColors.test.ts`.
 
 ## Homepage (`app/page.tsx`)
 
@@ -470,7 +474,7 @@ Design rule on every tab: **the answer people come for sits up top; deeper data 
 "Survivor Dash — UX Mockups" canvas and the "Fantasy Survivor" design system (colors = its tokens,
 declared once as CSS variables in `dash/styles.ts`).
 
-- `dash/model.ts` — pure helpers + derived data (team colors `TEAM_COLORS`, `asOf` week rewind,
+- `dash/model.ts` — pure helpers + derived data (re-exports `colorFor`, `asOf` week rewind,
   standings with rank movement / points back / players left, the auto-written week recap, draft
   pick numbers + steals & busts, history aggregates). Nothing is re-scored.
 - `dash/styles.ts` — the dashboard stylesheet, scoped under `.dash` and rendered only by the

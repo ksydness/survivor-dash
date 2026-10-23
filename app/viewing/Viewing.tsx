@@ -51,7 +51,7 @@ function Dots({ roster, inTeams, maybeTeams = [] }: { roster: Roster; inTeams: s
   return (
     <span className="dots" role="img" aria-label={`${inTeams.length} of ${roster.teams.length} teams in${inTeams.length ? ': ' + inTeams.join(', ') : ''}${maybeTeams.length ? `; maybe: ${maybeTeams.join(', ')}` : ''}`}>
       {roster.teams.map((t, i) => {
-        const c = colorFor(t, i);
+        const c = colorFor(t);
         // filled = someone on the team said Yes; half-filled = only a Maybe
         const st = inTeams.includes(t) ? { background: c, borderColor: c } : maybeTeams.includes(t) ? { background: `linear-gradient(90deg, ${c} 50%, transparent 50%)`, borderColor: c } : undefined;
         return <i key={t} style={st} />;
@@ -275,7 +275,7 @@ function WhoInline({ roster, who, onPick, verb }: { roster: Roster; who: Who | n
   const [editing, setEditing] = useState(false);
   const [askMates, setAskMates] = useState<string[]>([]);   // just picked a name → "voting for Karina too?"
   if (!roster.voters.length) return null;
-  const color = (team: string) => colorFor(team, roster.teams.indexOf(team));
+  const color = (team: string) => colorFor(team);
   if (who && askMates.length) return (
     <div className="who"><span className="t">Also answering for <b>{and(askMates)}</b>? Their own answers always win.</span>
       <button type="button" className="chipbtn" onClick={() => { onPick({ me: who.me, also: askMates }); setAskMates([]); }}>Yes</button>
@@ -343,7 +343,7 @@ function WhoPicker({ roster, who, onSave }: { roster: Roster; who: Who | null; o
     {roster.teams.map((t, i) => (
       <section key={t} className="card" aria-label={t}>
         <div className="hrow" style={{ justifyContent: 'flex-start' }}>
-          <span className="dots"><i style={{ background: colorFor(t, i), borderColor: colorFor(t, i) }} /></span>
+          <span className="dots"><i style={{ background: colorFor(t), borderColor: colorFor(t) }} /></span>
           <h3 className="eyebrow">{t}</h3>
         </div>
         <div className="chips" style={{ marginTop: 12 }}>
@@ -493,7 +493,7 @@ function pollShareText(v: V) {
   return `Vote on the next Survivor night (${list})${v.deadline ? ` by ${weekdayShort(todayET(new Date(v.deadline)))} 9 PM` : ''}:`;
 }
 
-/* ── after voting: where it stands ──────────────────────────────────── */
+/* ── after voting: where it stands ────────────────────────────────── */
 
 function Results({ s, votes, roster, me, answered, canLock, busy, eps, act, onChange }: {
   s: VotingS; votes: Vote[]; roster: Roster; me: string; answered: number;
@@ -616,7 +616,7 @@ function VoteTray({ optionId, teamsIn, votes, roster }: { optionId: string; team
   return (<>
     {roster.teams.map((t, i) => (
       <div key={t} className="tteam">
-        <div className="th"><span className="dots"><i style={{ background: colorFor(t, i), borderColor: colorFor(t, i) }} /></span>{t}{teamsIn.includes(t) && <em>In</em>}</div>
+        <div className="th"><span className="dots"><i style={{ background: colorFor(t), borderColor: colorFor(t) }} /></span>{t}{teamsIn.includes(t) && <em>In</em>}</div>
         <div className="ps">
           {roster.voters.filter(x => x.team === t).map(p => {
             const vt = votes.find(x => x.option_id === optionId && x.person === p.name);

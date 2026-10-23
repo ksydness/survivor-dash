@@ -24,7 +24,7 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
 
   const teams = d.teamTotals.map((t, i) => {
     const roster = rosterOf(d, t.team);
-    return { ...t, i, color: colorFor(t.team, i), roster, left: roster.filter(c => !c.eliminated).length };
+    return { ...t, i, color: colorFor(t.team), roster, left: roster.filter(c => !c.eliminated).length };
   });
   const aliveTotal = teams.reduce((a, t) => a + t.left, 0);
   const q = query.trim().toLowerCase();
@@ -51,7 +51,7 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
         {q && (
           <div className="result" aria-live="polite">
             {hit ? (<>
-              <Dot c={colorFor(hit.team, teams.find(t => t.team === hit.team)?.i ?? 0)} />
+              <Dot c={colorFor(hit.team)} />
               <span><b>{hit.name}</b> is on <b>{hit.team}</b><span className="muted"> · {hit.eliminated ? 'out' : 'still in'}</span></span>
             </>) : <span className="muted">No player matches “{query.trim()}”.</span>}
           </div>

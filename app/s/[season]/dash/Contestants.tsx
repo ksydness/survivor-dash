@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { SeasonPayload, Contestant } from '@/lib/types';
 import { Dot, PlayerCard } from './bits';
-import { bestWeek, colorFor, fmtDelta, latestWeek, teamIndex } from './model';
+import { bestWeek, colorFor, fmtDelta, latestWeek } from './model';
 
 type SortKey = 'total' | 'best' | 'name';
 
@@ -13,9 +13,8 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
   const [team, setTeam] = useState<string>('all');
   const [openName, setOpenName] = useState<string | null>(null);
   const [showOut, setShowOut] = useState(false);
-  const idx = teamIndex(d);
   const lw = latestWeek(d);
-  const color = (c: Contestant) => colorFor(c.team, idx[c.team] ?? 0);
+  const color = (c: Contestant) => colorFor(c.team);
 
   const rows = useMemo(() => {
     const r = d.contestants.filter(c => team === 'all' || c.team === team).map(c => ({ c, best: bestWeek(d, c).pts }));
@@ -54,7 +53,7 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
       <div className="chips" role="group" aria-label="Filter by team">
         <button type="button" className="chip" aria-pressed={team === 'all'} onClick={() => setTeam('all')}>All teams</button>
         {d.teamTotals.map((t, i) => (
-          <button key={t.team} type="button" className="chip" aria-pressed={team === t.team} onClick={() => setTeam(t.team)}><Dot c={colorFor(t.team, i)} />{t.team}</button>
+          <button key={t.team} type="button" className="chip" aria-pressed={team === t.team} onClick={() => setTeam(t.team)}><Dot c={colorFor(t.team)} />{t.team}</button>
         ))}
       </div>
 
