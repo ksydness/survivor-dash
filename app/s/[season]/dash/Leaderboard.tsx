@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import { Disclosure, Dot, Pips } from './bits';
 import { colorFor, fmtDelta, liveWeek, ordinal, recap, rosterOf, standings, weekLabel } from './model';
+import { shortName } from '@/lib/teamNames';
 
 export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams: (team: string) => void }) {
   const rc = recap(d);
@@ -27,7 +28,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
                 <div className="mini">
                   <div className="k">{rc.final ? `Wk ${rc.week} top scorer` : 'Top scorer'}</div>
                   <div className="v">{rc.topScorer.names.length > 2 ? `${rc.topScorer.names.length}-way tie` : rc.topScorer.names.join(' & ')}</div>
-                  <div className="d">{rc.topScorer.pts ?? '—'} pts{rc.topScorer.team ? ` · ${rc.topScorer.team}` : ''}</div>
+                  <div className="d">{rc.topScorer.pts ?? '—'} pts{rc.topScorer.team ? ` · ${shortName(rc.topScorer.team)}` : ''}</div>
                 </div>
               )}
               {rc.topTeam && (
@@ -35,7 +36,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
                   <div className="k">{rc.final ? `Wk ${rc.week} top team` : 'Top team'}</div>
                   <div className="v">
                     {rc.topTeam.names.length === 1 && <Dot c={colorFor(rc.topTeam.names[0])} />}
-                    {rc.topTeam.names.length > 2 ? `${rc.topTeam.names.length}-way tie` : rc.topTeam.names.join(' & ')}
+                    {rc.topTeam.names.length > 2 ? `${rc.topTeam.names.length}-way tie` : rc.topTeam.names.map(shortName).join(' & ')}
                   </div>
                   <div className="d">{rc.topTeam.pts ?? '—'} pts that week</div>
                 </div>
@@ -63,7 +64,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
                     {mv && <span className={`mv ${mv.cls}`}><span aria-hidden>{mv.txt}</span><span className="sr">{mv.sr} since last week</span></span>}
                   </span>
                   <span style={{ minWidth: 0 }}>
-                    <span className="tn"><Dot c={t.color} /><span>{t.team}{champ ? ' 👑' : ''}</span></span>
+                    <span className="tn"><Dot c={t.color} /><span>{shortName(t.team)}{champ ? ' 👑' : ''}</span></span>
                     <span className="track" aria-hidden><i style={{ width: `${rows[0].total > 0 ? Math.max(2, (t.total / rows[0].total) * 100) : 0}%`, background: t.color }} /></span>
                     <span className="meta">
                       <span className={t.week !== null && t.week < 0 ? 'neg' : ''}>{t.week !== null ? `${fmtDelta(t.week)} this week` : `${t.left} of ${t.size} left`}</span>
@@ -108,7 +109,7 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
           <h2 className="ph" style={{ marginBottom: 12 }}>Rank through the season</h2>
           <RankChart d={d} />
           <div className="legend">
-            {d.teamTotals.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team)} />{t.team}</div>)}
+            {d.teamTotals.map(t => <div key={t.team}><Dot c={colorFor(t.team)} />{shortName(t.team)}</div>)}
           </div>
         </section>
       )}
@@ -199,7 +200,7 @@ function Tied({ names, pts, open, onToggle, teams }: { names: string[]; pts: num
   if (names.length > 3 && !open) return <span><button type="button" className="tiebtn" aria-expanded={false} onClick={onToggle}>{names.length}-way tie ▾</button>{p}</span>;
   return (
     <span className="names">
-      {teams ? names.map(n => <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Dot c={colorFor(n)} />{n}</span>) : names.join(', ')}
+      {teams ? names.map(n => <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Dot c={colorFor(n)} />{shortName(n)}</span>) : names.join(', ')}
       {p}
       {names.length > 3 && <button type="button" className="tiebtn" aria-expanded onClick={onToggle}>less ▴</button>}
     </span>

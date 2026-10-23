@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import { Disclosure, Dot } from './bits';
 import { colorFor, r2, teamWeekPts, weekLabel } from './model';
+import { shortName } from '@/lib/teamNames';
 
 /** Stats: four headline numbers up top; the heatmap, weekly totals and records behind "Dig deeper". */
 export default function Stats({ d }: { d: SeasonPayload }) {
@@ -28,16 +29,16 @@ export default function Stats({ d }: { d: SeasonPayload }) {
         <div className="tile">
           <div className="k">{coLeaders.length > 1 ? (final ? 'Co-champions' : 'Tied for 1st') : final ? 'Champion' : 'Leader'}</div>
           {coLeaders.length > 1
-            ? <div className="v sm">{coLeaders.map((t, i) => <span key={t.team} style={{ display: 'block', color: colorFor(t.team) }}>{t.team}</span>)}</div>
-            : <div className="v sm" style={{ color: leader ? colorFor(leader.team) : undefined }}>{leader?.team ?? '—'}</div>}
+            ? <div className="v sm">{coLeaders.map((t, i) => <span key={t.team} style={{ display: 'block', color: colorFor(t.team) }}>{shortName(t.team)}</span>)}</div>
+            : <div className="v sm" style={{ color: leader ? colorFor(leader.team) : undefined }}>{leader ? shortName(leader.team) : '—'}</div>}
           <div className="d">{!leader ? '' : coLeaders.length > 1
-            ? `${leader.total} pts each${second ? ` · ${r2(leader.total - second.total)} ahead of ${second.team}` : ''}`
+            ? `${leader.total} pts each${second ? ` · ${r2(leader.total - second.total)} ahead of ${shortName(second.team)}` : ''}`
             : `${leader.total} pts${second ? ` · ${r2(leader.total - second.total)} ahead` : ''}`}</div>
         </div>
         <div className="tile">
           <div className="k">Top contestant</div>
           <div className="v">{top[0]?.name ?? '—'}</div>
-          <div className="d">{top[0] ? `${top[0].total} pts · ${top[0].team}` : ''}</div>
+          <div className="d">{top[0] ? `${top[0].total} pts · ${shortName(top[0].team)}` : ''}</div>
         </div>
         <div className="tile">
           <div className="k">Biggest week</div>
@@ -58,13 +59,13 @@ export default function Stats({ d }: { d: SeasonPayload }) {
         </Disclosure>
         <Disclosure title="League points per week" sub="How big each episode was, split by team">
           <WeeklyStack d={d} />
-          <div className="legend">{tt.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team)} />{t.team}</div>)}</div>
+          <div className="legend">{tt.map((t, i) => <div key={t.team}><Dot c={colorFor(t.team)} />{shortName(t.team)}</div>)}</div>
         </Disclosure>
         <Disclosure title="More records" sub="Margins, totals and negative weeks">
           <div className="rows">
             {tt.length > 1 && <div><span>Margin, 1st to last</span><b className="num">{r2(tt[0].total - tt[tt.length - 1].total)} pts</b></div>}
             <div><span>Total points scored</span><b className="num">{allPts.toLocaleString()}</b></div>
-            {bestTeamWk.t && <div><span>Biggest team week</span><b>{bestTeamWk.v} · {bestTeamWk.t}, Wk {bestTeamWk.wk}</b></div>}
+            {bestTeamWk.t && <div><span>Biggest team week</span><b>{bestTeamWk.v} · {shortName(bestTeamWk.t)}, Wk {bestTeamWk.wk}</b></div>}
             <div><span>Negative weeks</span><b className="num">{negs.length}</b></div>
             {negs.map((n, i) => <div key={i}><span>{n.c} <span className="muted">· Wk {n.wk}</span></span><b className="neg num">{n.v}</b></div>)}
           </div>

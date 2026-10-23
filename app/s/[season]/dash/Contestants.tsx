@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { SeasonPayload, Contestant } from '@/lib/types';
 import { Dot, PlayerCard } from './bits';
 import { bestWeek, colorFor, fmtDelta, latestWeek } from './model';
+import { shortName } from '@/lib/teamNames';
 
 type SortKey = 'total' | 'best' | 'name';
 
@@ -33,7 +34,7 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
       <div key={c.name} className={`crow ${isOut ? 'out' : ''}`}>
         <button type="button" aria-expanded={open} onClick={() => setOpenName(open ? null : c.name)}>
           <Dot c={color(c)} />
-          <span className="nm"><b>{c.name}</b><span>{c.team}{isOut ? (c.out_week ? ` · out Wk ${c.out_week}` : ' · out') : ''}</span></span>
+          <span className="nm"><b>{c.name}</b><span>{shortName(c.team)}{isOut ? (c.out_week ? ` · out Wk ${c.out_week}` : ' · out') : ''}</span></span>
           {!isOut && wk !== null && d.meta.status === 'active' && <span className={`wk num ${wk < 0 ? 'neg' : ''}`}>{fmtDelta(wk)} wk</span>}
           <span className="tot num">{c.total}</span>
           <span className="chev" aria-hidden>{open ? '▴' : '▾'}</span>
@@ -53,7 +54,7 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
       <div className="chips" role="group" aria-label="Filter by team">
         <button type="button" className="chip" aria-pressed={team === 'all'} onClick={() => setTeam('all')}>All teams</button>
         {d.teamTotals.map((t, i) => (
-          <button key={t.team} type="button" className="chip" aria-pressed={team === t.team} onClick={() => setTeam(t.team)}><Dot c={colorFor(t.team)} />{t.team}</button>
+          <button key={t.team} type="button" className="chip" aria-pressed={team === t.team} onClick={() => setTeam(t.team)}><Dot c={colorFor(t.team)} />{shortName(t.team)}</button>
         ))}
       </div>
 

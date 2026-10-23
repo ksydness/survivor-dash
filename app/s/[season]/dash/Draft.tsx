@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import { colorFor, draftPicks, ordinal, stealsAndBusts, tint } from './model';
+import { shortName } from '@/lib/teamNames';
 
 /** Draft: the whole board on one screen (rounds down, teams across), then steals & busts. */
 export default function Draft({ d }: { d: SeasonPayload }) {
@@ -25,7 +26,7 @@ export default function Draft({ d }: { d: SeasonPayload }) {
   const ticks = [0, ...[0.5, 1].map(f => Math.round((yMax * f) / step) * step)].filter((t, i, a) => a.indexOf(t) === i);
 
   const readout = (p: typeof sel) => p && p.name ? (
-    <><b>{p.name}</b><span className="muted"> · Round {p.round}, pick #{p.pick} · {p.team}{p.c ? ' · ' : ''}</span>
+    <><b>{p.name}</b><span className="muted"> · Round {p.round}, pick #{p.pick} · {shortName(p.team)}{p.c ? ' · ' : ''}</span>
       {p.c && <b style={{ color: color(p.teamIdx) }}>{p.c.total} pts{p.c.eliminated ? ' · out' : ''}</b>}</>
   ) : <span className="muted">Tap a pick for details.</span>;
 
@@ -38,7 +39,7 @@ export default function Draft({ d }: { d: SeasonPayload }) {
         </div>
         <div className="dgrid" style={{ ['--n' as string]: n }}>
           <span />
-          {b.teams.map((t, i) => <div key={t} className="dhead" style={{ borderColor: color(i) }}>{t}</div>)}
+          {b.teams.map((t, i) => <div key={t} className="dhead" style={{ borderColor: color(i) }}>{shortName(t)}</div>)}
         </div>
         <div style={{ display: 'grid', gap: 4, marginTop: 6 }}>
           {b.rounds.map((row, r) => (
