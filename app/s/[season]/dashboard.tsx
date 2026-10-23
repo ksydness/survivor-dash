@@ -22,10 +22,18 @@ import History from './dash/History';
 
 type Tab = 'leaderboard' | 'teams' | 'contestants' | 'draft' | 'stats' | 'history';
 const TABS: [Tab, string][] = [
-  ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Contestants'],
+  ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Players'],
   ['draft', 'Draft'], ['stats', 'Stats'], ['history', 'History'],
 ];
 const isTab = (v: string | null): v is Tab => !!v && TABS.some(([id]) => id === v);
+
+// extra styles for this page: the fade that says "more tabs this way" and the compact reveal pill in the week bar
+const PAGE_CSS = `
+.dash .tabsbar::after{content:"";position:absolute;top:0;right:0;bottom:0;width:40px;pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg));transition:opacity .2s}
+.dash .tabsbar.end::after{opacity:0}
+.dash .weekbar .wpill{flex:none;height:36px;margin-right:4px;padding:0 12px;border:0;border-radius:999px;background:linear-gradient(90deg,#f59e0b,#f97316);color:#1c1917;font:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer}
+.dash .weekbar .wpill:focus-visible{outline:2px solid #fcd34d;outline-offset:2px}
+`;
 
 export default function Dashboard({ season }: { season: number }) {
   const [data, setData] = useState<SeasonPayload | null>(null);
@@ -38,6 +46,7 @@ export default function Dashboard({ season }: { season: number }) {
   const tabsRef = useRef<HTMLElement | null>(null);
   const [seenTick, setSeenTick] = useState(0);  // bumps after a reveal so the cookie is re-read
   const [splash, setSplash] = useState<RevealInfo | null>(null);
+  const [tabsEnd, setTabsEnd] = useState(false);  // scrolled to the last tab → hide the fade
 
   // spoiler shield: a live season only shows the weeks this phone has revealed (see dash/spoiler.ts)
   const shield = useMemo(() => (data?.meta ? shieldFor(data, readSeen(season)) : null), [data, season, seenTick]);
@@ -53,6 +62,15 @@ export default function Dashboard({ season }: { season: number }) {
     const row = tabsRef.current;
     if (el && row) row.scrollTo({ left: Math.max(0, el.offsetLeft - (row.clientWidth - el.offsetWidth) / 2), behavior: 'smooth' });
   }, [tab, data]);
+  function checkTabsEnd() {
+    const row = tabsRef.current;
+    if (row) setTabsEnd(row.scrollLeft + row.clientWidth >= row.scrollWidth - 4);
+  }
+  useEffect(() => {
+    checkTabsEnd();
+    window.addEventListener('resize', checkTabsEnd);
+    return () => window.removeEventListener('resize', checkTabsEnd);
+  }, [data]);
 
   async function load(sync = false) {
     sync ? setRefreshing(true) : setLoading(true);
@@ -137,6 +155,8 @@ export default function Dashboard({ season }: { season: number }) {
   const k = view === null ? last : Math.min(view, last);
   const v = view === null ? base : asOf(base, k);  // what every tab renders
   const nextHidden = shield?.on ? shield.hidden[0] : null;
+  // a newer week is hidden: the big banner sits on the Leaderboard; every tab gets a small "Week N ›" pill in the week bar
+  const revealWeek = nextHidden !== null ? weekLabel(data, (data.meta.scored_weeks ?? [])[nextHidden]) : null;
   function revealed() {
     if (splash) writeSeen(season, splash.week);
     setSplash(null);
@@ -153,29 +173,32 @@ export default function Dashboard({ season }: { season: number }) {
   return (
     <div className="dash">
       <style>{CSS}</style>
+      <style>{PAGE_CSS}</style>
       {appBar}
       {hint && <p className="hint" role="status">{hint}</p>}
       <div className="wrap">
         <nav className={`weekbar ${k < last ? 'past' : ''}`} aria-label="Week">
           <button type="button" className="iconbtn" aria-label="Previous week" disabled={sw.length === 0 || k <= 0} onClick={() => goTo(k - 1)}><IconPrev /></button>
           <div className="lbl" aria-live="polite">{label}{live && <span className="live">Live</span>}{k < last && <span className="sr"> (earlier week)</span>}</div>
-          <button type="button" className="iconbtn" aria-label="Next week" disabled={sw.length === 0 || k >= last} onClick={() => goTo(k + 1 >= last ? null : k + 1)}><IconNext /></button>
+          {revealWeek !== null && k >= last
+            ? <button type="button" className="wpill" aria-label={`Week ${revealWeek} scores are in — reveal`} onClick={() => setSplash(revealInfo(data, nextHidden!))}>Week {revealWeek} ›</button>
+            : <button type="button" className="iconbtn" aria-label="Next week" disabled={sw.length === 0 || k >= last} onClick={() => goTo(k + 1 >= last ? null : k + 1)}><IconNext /></button>}
         </nav>
         {k < last && <button type="button" className="latest" onClick={() => goTo(null)}>Back to latest (Week {weekLabel(base, sw[last])}) »</button>}
-        {nextHidden !== null && (
+        {nextHidden !== null && cur === 'leaderboard' && (
           <div className="shieldbar" role="region" aria-label="Spoiler shield">
             <style>{SHIELD_CSS}</style>
             <span className="sic" aria-hidden>🔥</span>
             <span className="stx">
-              <b>Week {weekLabel(data, (data.meta.scored_weeks ?? [])[nextHidden])} scores are in</b>
+              <b>Week {revealWeek} scores are in</b>
               <span>{last >= 0 ? `Showing through Week ${weekLabel(base, sw[last])}.` : 'Nothing shown yet.'} Watched it?</span>
             </span>
             <button type="button" className="sbtn" onClick={() => setSplash(revealInfo(data, nextHidden))}>Reveal</button>
           </div>
         )}
 
-        <div className="tabsbar">
-          <nav className="tabs" aria-label="Dashboard sections" ref={tabsRef}>
+        <div className={`tabsbar ${tabsEnd ? 'end' : ''}`}>
+          <nav className="tabs" aria-label="Dashboard sections" ref={tabsRef} onScroll={checkTabsEnd}>
             {tabs.map(([id, l]) => (
               <button key={id} type="button" className="tab" aria-current={cur === id ? 'page' : undefined} onClick={() => setTab(id)}>{l}</button>
             ))}
