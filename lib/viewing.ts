@@ -13,11 +13,12 @@ import { VAPID_PUBLIC_KEY, PUSH_SUBJECT } from './pushConfig';
 import { getSeasons, getDraftData, getPlaces } from './data';
 import {
   type Answer, type Roster, type Viewing, type ViewingOption, type ViewingState, type Vote, type Going, type Rsvp,
-  PLACES, addressFor, barFor, buildRoster, tally, waitingOn, clearWinner, topNights, leadLine, attendees, teamsIn, todayET, hourET, etToUtc,
+  PLACES, addressFor, barFor, buildRoster, attendees, teamsIn, todayET, hourET, etToUtc,
   isYmd, isHhmm, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayShort, optKey,
   goingList, startingRsvp, nightName, nightMid,
   DEADLINE_HOUR, NUDGE_LEAD_H, NUDGE_FROM_HOUR, REMINDER_HOUR, MAX_EPISODES, MAX_TIMES_PER_DAY,
 } from './viewingModel';
+import { situation } from './viewingSituation';
 
 // Preview deployments get their own league so testing never touches the real poll or pings phones.
 const LEAGUE = process.env.VERCEL_ENV === 'preview' ? `${BASE_LEAGUE}-preview` : BASE_LEAGUE;
@@ -262,26 +263,24 @@ export async function getCalendarNights(): Promise<{ nights: Viewing[]; addresse
 
 /**
  * Close a poll when its deadline has passed or every voter has answered every option. It locks itself ONLY
- * when everyone voted and one night clearly wins (more teams with a Yes than any other — `clearWinner`).
+ * when everyone voted and one night clearly wins (more teams with a Yes than any other — see `situation()` in viewingSituation.ts).
  * Anything else — people didn't vote, a tie, nothing cleared the bar — closes it and waits for the poll
  * starter or commissioner to pick (Kenny's call, 2026-10-18, after a 4-of-8-voted poll auto-picked a night
  * people didn't expect).
  */
 async function finalizeIfDue(row: Row, votes: Vote[], roster: Roster, force = false): Promise<Row | null> {
-  const opts = row.options ?? [];
+  const today = todayET();
+  const before = situation({ viewing: toViewing(row), votes, roster, today });
+  if (before.phase !== 'voting') return null;
   const pastDeadline = !!row.deadline && Date.now() >= Date.parse(row.deadline);
-  const allIn = opts.length > 0 && waitingOn(opts, votes, roster).length === 0;
-  if (!force && !pastDeadline && !allIn) return null;
-  const t = tally(opts, votes, roster);
-  const winner = allIn ? clearWinner(t) : null;
-  if (winner) return lockRow(row, winner.option.date, winner.option.time, 'auto', votes, roster);
+  if (!force && !pastDeadline && !before.everyoneVoted) return null;
+  if (before.clearWinner) return lockRow(row, before.clearWinner.option.date, before.clearWinner.option.time, 'auto', votes, roster);
   const closed = await store().update(row.id, row.version, { status: 'closed', reminded_at: null });
   if (closed) {
-    const top = topNights(t);
+    const after = situation({ viewing: toViewing(closed), votes, roster, today });
     const n = roster.teams.length;
-    if (top.length) {
-      const voted = roster.voters.length - waitingOn(opts, votes, roster).length;
-      const why = `${leadLine(top, n)} · ${voted} of ${roster.voters.length} voted`;
+    if (after.phase === 'needs-pick') {
+      const why = after.summary;
       await push(people => (people.includes(row.created_by)
         ? { title: 'Votes are in — pick the Survivor night', body: `${why}.`, tag: `viewing-${row.id}-closed` }
         : { title: `Votes are in — ${row.created_by} picks the Survivor night`, body: `${why}.`, tag: `viewing-${row.id}-closed` }));
@@ -384,7 +383,10 @@ export async function act(body: ActionBody): Promise<ViewingState> {
     return r;
   };
   // the poll starter themself (not a phone that votes for them) or the commissioner
-  const canLock = () => isCommish(body.key) || (!!row && body.me === row.created_by && people.includes(row.created_by));
+  const canLock = () => situation({
+    viewing: row ? toViewing(row) : null, votes, roster, today, commissioner: isCommish(body.key),
+    people: typeof body.me === 'string' && people.includes(body.me) ? [body.me, ...people.filter(p => p !== body.me)] : [],
+  }).mayAct;
 
   switch (body.action) {
     case 'checkkey': { // the hidden commissioner-key field: only says whether the key is right
@@ -611,7 +613,7 @@ export async function act(body: ActionBody): Promise<ViewingState> {
   return getViewingState();
 }
 
-/* ── tick: deadline, nudge, morning-of reminder ────────────────────────── */
+/* ── tick: deadline, nudge, morning-of reminder ──────────────────────── */
 
 export async function tick(): Promise<Record<string, unknown>> {
   if (!viewingConfigured()) return { skipped: 'not configured' };
@@ -627,7 +629,8 @@ export async function tick(): Promise<Record<string, unknown>> {
     if (now >= nudgeAt && startedLongAgo && daytime) {
       const r = await store().update(row.id, row.version, { nudged_at: new Date().toISOString() });
       if (r) {
-        const missing = waitingOn(row.options, votes, roster);
+        const sit = situation({ viewing: toViewing(row), votes, roster, today: todayET() });
+        const missing = sit.phase === 'voting' ? sit.waitingOn : [];
         const inCount = roster.voters.length - missing.length;
         await push(people => {
           const mine = people.filter(p => missing.includes(p));
@@ -645,11 +648,11 @@ export async function tick(): Promise<Record<string, unknown>> {
 
   // votes are in but nobody has picked yet: remind the poll starter once, the next morning
   if (row.status === 'closed' && !row.reminded_at && hourET() >= REMINDER_HOUR && row.updated_at && todayET(new Date(row.updated_at)) < todayET()) {
-    const top = topNights(tally(row.options.filter(o => o.date >= todayET()), votes, roster));
-    if (top.length) {
+    const sit = situation({ viewing: toViewing(row), votes, roster, today: todayET() });
+    if (sit.phase === 'needs-pick') {
       const r = await store().update(row.id, row.version, { reminded_at: new Date().toISOString() });
       if (r) {
-        await push({ title: 'Still need a pick for Survivor night', body: `${leadLine(top, roster.teams.length)}.`, tag: `viewing-${row.id}-pick` },
+        await push({ title: 'Still need a pick for Survivor night', body: `${sit.leadLine}.`, tag: `viewing-${row.id}-pick` },
           people => people.includes(row.created_by));
         return { status: 'pick-reminded' };
       }
