@@ -1,19 +1,23 @@
 import Link from 'next/link';
 import type { ViewingState } from '@/lib/viewingModel';
-import { tally, waitingOn, attendees, goingList, topNights, leadLine, notSure, teamsIn, todayET, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong } from '@/lib/viewingModel';
+import { todayET, dayLabel, timeLabel, deadlineLabel, epLabel, weekdayLong } from '@/lib/viewingModel';
+import { situation } from '@/lib/viewingSituation';
 import { colorFor } from '../s/[season]/dash/model';
 import VoteButton, { NightButton } from './VoteButton';
 
-/** Homepage "Next Survivor night" card: nothing planned / poll open / no night worked / locked. Details live on /viewing. */
+/** Homepage "Next Survivor night" card: nothing planned / poll open / votes are in / no night worked / set. Details live on /viewing. */
 export default function ViewingCard({ st }: { st: ViewingState }) {
-  const { viewing: v, votes, roster, bar } = st;
+  const { roster } = st;
+  const today = todayET(new Date(st.now));
+  const s = situation({ viewing: st.viewing, votes: st.votes, roster, today });
+  const snap = { viewing: st.viewing, votes: st.votes, roster, now: st.now };
   const dots = (inTeams: string[]) => (
     <span className="vdots" role="img" aria-label={`${inTeams.length} of ${roster.teams.length} teams in`}>
       {roster.teams.map((t, i) => <i key={t} style={inTeams.includes(t) ? { background: colorFor(t, i), borderColor: colorFor(t, i) } : undefined} />)}
     </span>
   );
 
-  if (!v) return (
+  if (s.phase === 'none') return (
     <section className="card" aria-labelledby="nv">
       <h2 id="nv" className="eyebrow">Next Survivor night</h2>
       <p className="headline">Nothing on the calendar</p>
@@ -25,10 +29,9 @@ export default function ViewingCard({ st }: { st: ViewingState }) {
     </section>
   );
 
-  if (v.status === 'polling') {
-    const t = tally(v.options, votes, roster);
-    const lead = t[0]?.yes.length ? t[0] : null;
-    const waiting = waitingOn(v.options, votes, roster);
+  if (s.phase === 'voting') {
+    const v = s.viewing;
+    const lead = s.leading;
     return (
       <section className="card" aria-labelledby="nv">
         <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill"><i />Poll open</span></div>
@@ -37,53 +40,46 @@ export default function ViewingCard({ st }: { st: ViewingState }) {
         {lead && (
           <div className="vlead">
             <span><b>{dayLabel(lead.option.date)}</b> · {timeLabel(lead.option.time)} <em>Leading</em></span>
-            <span className="vcount">{dots(lead.teamsIn)}<span className="num">{lead.teamsIn.length}/{roster.teams.length}</span></span>
+            <span className="vcount">{dots(lead.teamsIn)}<span className="num">{lead.teamsIn.length}/{s.teams}</span></span>
           </div>
         )}
         <div className="facts">
-          <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted · {v.options.length} options</span>
-          {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
+          <span className="num">{s.voted} of {s.voters} voted · {v.options.length} options</span>
+          {s.waitingOn.length > 0 && <span>Waiting on <b>{s.waitingOn.join(', ')}</b></span>}
         </div>
-        <VoteButton options={v.options} votes={votes} />
+        <VoteButton st={snap} />
       </section>
     );
   }
 
-  if (v.status === 'closed' && topNights(tally(v.options.filter(o => o.date >= todayET()), votes, roster)).length) {
-    const top = topNights(tally(v.options.filter(o => o.date >= todayET()), votes, roster));
-    const missed = waitingOn(v.options, votes, roster).length;
-    return (
-      <section className="card" aria-labelledby="nv">
-        <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill"><i />Votes are in</span></div>
-        <p className="headline">{v.created_by} picks the night</p>
-        <p className="lede">{leadLine(top, roster.teams.length)} · {roster.voters.length - missed} of {roster.voters.length} voted</p>
-        <Link className="cta" href="/viewing">See the votes</Link>
-      </section>
-    );
-  }
+  if (s.phase === 'needs-pick') return (
+    <section className="card" aria-labelledby="nv">
+      <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill"><i />Votes are in</span></div>
+      <p className="headline">{s.viewing.created_by} picks the night</p>
+      <p className="lede">{s.summary}</p>
+      <Link className="cta" href="/viewing">See the votes</Link>
+    </section>
+  );
 
-  if (v.status === 'closed') return (
+  if (s.phase === 'no-night') return (
     <section className="card" aria-labelledby="nv">
       <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill done"><i />Poll closed</span></div>
-      <p className="headline">No night got {bar} of {roster.teams.length} teams</p>
+      <p className="headline">No night got {s.bar} of {s.teams} teams</p>
       <p className="lede">Add more nights, pick a date, or lock one anyway.</p>
       <Link className="cta" href="/viewing">Decide</Link>
     </section>
   );
 
-  // locked
-  const date = v.lock_date!;
-  const going = attendees(v, votes, roster);
-  const unsureNames = notSure(v, votes, roster);
-  const unsure = unsureNames.length;
-  const inTeams = teamsIn(going, roster);
+  // set
+  const v = s.viewing;
+  const date = s.date;
   return (
     <section className="card" aria-labelledby="nv">
-      <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill"><i />{date === todayET() ? 'Tonight' : 'Set'}</span></div>
+      <div className="hrow"><h2 id="nv" className="eyebrow">Next Survivor night</h2><span className="pill"><i />{date === today ? 'Tonight' : 'Set'}</span></div>
       <p className="headline">{weekdayLong(date)}, {dayLabel(date).split(', ')[1]}{v.lock_time ? ` · ${timeLabel(v.lock_time)}` : ''}</p>
       <p className="lede">{v.place ? `At ${v.place}` : 'Where: not set yet'} · {epLabel(v.episodes)}{v.lock_time ? '' : ' · time TBD'}</p>
-      <div className="facts"><span className="vcount">{dots(inTeams)}<span className="num">{inTeams.length} of {roster.teams.length} teams · {going.length} coming{unsure ? ` · ${unsure} not sure` : ''}</span></span></div>
-      <NightButton unsure={unsureNames} going={going} out={goingList(v, votes, roster).filter(g => g.s === 'out').map(g => g.name)} label={!v.place || !v.lock_time ? 'Details · set what’s missing' : 'Details'} />
+      <div className="facts"><span className="vcount">{dots(s.teamsIn)}<span className="num">{s.teamsIn.length} of {s.teams} teams · {s.coming.length} coming{s.unsure.length ? ` · ${s.unsure.length} not sure` : ''}</span></span></div>
+      <NightButton st={snap} label={!v.place || !v.lock_time ? 'Details · set what’s missing' : 'Details'} />
     </section>
   );
 }
