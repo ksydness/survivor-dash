@@ -11,6 +11,7 @@ import type { Standing } from '../s/[season]/dash/model';
 import { fmtDelta } from '../s/[season]/dash/model';
 import { readSeen, writeSeen, type RevealInfo } from '../s/[season]/dash/spoiler';
 import RevealSplash, { SHIELD_CSS } from '../RevealSplash';
+import { shortName } from '@/lib/teamNames';
 
 export interface Frame {
   week: number | null;     // sheet week label shown in the eyebrow (null = nothing scored / revealed)
@@ -138,7 +139,7 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
                 {mv && <span className={`mv ${mv.c}`}>{mv.txt}</span>}
               </span>
               <span className="who" aria-hidden>
-                <span className="tn"><span className="dot" style={{ background: t.color }} /><span>{t.team}{!active && t.rank === 1 ? ' 👑' : ''}</span></span>
+                <span className="tn"><span className="dot" style={{ background: t.color }} /><span>{shortName(t.team)}{!active && t.rank === 1 ? ' 👑' : ''}</span></span>
                 <span className="sub">
                   <span className="pips">{Array.from({ length: t.size }, (_, n) => <span key={n} className="pip" style={n < t.left ? { background: t.color, borderColor: t.color } : undefined} />)}</span>
                   {t.left} of {t.size} left
