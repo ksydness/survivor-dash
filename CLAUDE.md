@@ -491,3 +491,17 @@ first season drafted in the live draft room). `prototype/index.html` is the orig
 reference. Ideas not yet built: returning-player context in the draft room, a search/filter box for
 the 24-name pool, marking a contestant "out before the draft", an optional join code for picks, and
 the parked `future-db/` scoring migration.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `ksydness/survivor-dash`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context (`GLOSSARY.md` + `docs/adr/` at the repo root, created lazily). See `docs/agents/domain.md`.
