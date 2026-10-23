@@ -14,9 +14,14 @@ import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
   type Going,
-  tally, waitingOn, goingList, winnerOption, topNights, leadLine, teamsIn, todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
+  todayET, hourET, addDays, dayLabel, timeLabel, deadlineLabel,
   epLabel, weekdayLong, weekdayShort, optKey, MAX_EPISODES, MAX_TIMES_PER_DAY, addressFor, directionsUrl, placeKey,
 } from '@/lib/viewingModel';
+import { situation, type NightTally, type Situation } from '@/lib/viewingSituation';
+
+type VotingS = Extract<Situation, { phase: 'voting' }>;
+type ClosedS = Extract<Situation, { phase: 'needs-pick' | 'no-night' }>;
+type SetS = Extract<Situation, { phase: 'set' }>;
 
 const WHO_KEY = 'survivor-viewer';           // { me, also[] } — who votes on this phone
 const COMMISH_KEY = 'survivor-commish-key';  // shared with the draft room
@@ -203,8 +208,11 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
   const removeKey = () => { ls.del(COMMISH_KEY); setKey(''); setFlash('Commissioner key removed from this phone.'); };
 
   const { roster, viewing: v, votes } = st;
+  // the server's clock, not the phone's (a phone with the wrong date would count the wrong nights)
+  const today = todayET(new Date(st.now));
+  const sit = useMemo(() => situation({ viewing: v, votes, roster, today, people, commissioner: !!key }), [v, votes, roster, today, people, key]);
   // whoever started it (on their own phone — not a phone that votes for them) or the commissioner
-  const canLock = !!key || (!!v && who?.me === v.created_by);
+  const canLock = sit.mayAct;
   const back = screen === 'main' ? null : () => { setScreen('main'); setErr(null); };
 
   return (
@@ -234,12 +242,12 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
         {screen === 'main' && keyBox && <KeyBox busy={busy} onSave={saveKey} onCancel={() => setKeyBox(false)} />}
 
         {screen === 'main' && (<>
-          {!v && <Idle onStart={() => setScreen('start')} onAdd={() => setScreen('add')} />}
-          {v?.status === 'polling' && <Polling v={v} votes={votes} roster={roster} bar={st.bar} who={who} people={people} canLock={canLock}
+          {sit.phase === 'none' && <Idle onStart={() => setScreen('start')} onAdd={() => setScreen('add')} />}
+          {sit.phase === 'voting' && <Polling s={sit} votes={votes} roster={roster} who={who} people={people} canLock={canLock}
             busy={busy} act={act} onPick={rememberWho} />}
-          {v?.status === 'closed' && <Closed v={v} votes={votes} roster={roster} bar={st.bar} canLock={canLock} busy={busy} act={act}
+          {(sit.phase === 'needs-pick' || sit.phase === 'no-night') && <Closed s={sit} votes={votes} roster={roster} canLock={canLock} busy={busy} act={act}
             onReopen={() => setScreen('reopen')} onAdd={() => setScreen('add')} onStart={() => setScreen('start')} />}
-          {v?.status === 'locked' && <Locked v={v} votes={votes} roster={roster} bar={st.bar} places={st.places} addresses={st.addresses ?? {}} who={who} people={people} canLock={canLock} busy={busy} act={act}
+          {sit.phase === 'set' && <Locked s={sit} today={today} votes={votes} roster={roster} places={st.places} addresses={st.addresses ?? {}} who={who} people={people} canLock={canLock} busy={busy} act={act}
             onPick={rememberWho} />}
           {v?.status !== 'locked' && <CalendarFooter />}
           {who && (
@@ -376,18 +384,17 @@ function Idle({ onStart, onAdd }: { onStart: () => void; onAdd: () => void }) {
 
 type Act = (action: string, extra?: Record<string, unknown>, done?: string) => Promise<boolean>;
 
-function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onPick }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
+function Polling({ s, votes, roster, who, people, canLock, busy, act, onPick }: {
+  s: VotingS; votes: Vote[]; roster: Roster; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
 }) {
-  const t = tally(v.options, votes, roster);
+  const { viewing: v, nights: t, waitingOn: waiting, bar } = s;
   const leader = t[0];
-  const waiting = waitingOn(v.options, votes, roster);
   const byDate = [...t].sort((a, b) => optKey(a.option).localeCompare(optKey(b.option)));
   const [adding, setAdding] = useState(false);
   const [eps, setEps] = useState(v.episodes);
   useEffect(() => setEps(v.episodes), [v.episodes]);
   // how far this phone's voter is: answers save as they tap — "Done" just moves them on to the results
-  const answered = who ? v.options.filter(o => votes.some(x => x.option_id === o.id && x.person === who.me)).length : 0;
+  const answered = who ? s.mine[0]?.answered ?? 0 : 0;
   const total = v.options.length;
   // answers someone else gave for this phone's person (Tony voting for Karina) — she gets to check them first
   const byOthers = who ? votes.filter(x => x.person === who.me && x.cast_by !== who.me && v.options.some(o => o.id === x.option_id)) : [];
@@ -418,7 +425,7 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onPic
   };
 
   if (showResults && who) return (
-    <Results v={v} votes={votes} roster={roster} bar={bar} t={t} waiting={waiting} me={who.me} answered={answered}
+    <Results s={s} votes={votes} roster={roster} me={who.me} answered={answered}
       canLock={canLock} busy={busy} eps={eps} act={act} onChange={() => { setShowResults(false); toTop(); }} />
   );
 
@@ -428,7 +435,7 @@ function Polling({ v, votes, roster, bar, who, people, canLock, busy, act, onPic
       <h2 className="title">Pick a night for the next {epLabel(v.episodes)}</h2>
       <p className="lede">{v.created_by} started it · vote by <b>{v.deadline ? deadlineLabel(v.deadline) : '—'}</b></p>
       <div className="facts">
-        <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
+        <span className="num">{s.voted} of {s.voters} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
       </div>
       {answered === 0 && <p className="note" style={{ marginTop: 10 }}>Once everyone has voted, the night with the most teams saying Yes locks itself (needs {bar} of {roster.teams.length}). If it’s a tie or people don’t vote, {v.created_by} picks after the deadline.</p>}
@@ -486,14 +493,15 @@ function pollShareText(v: V) {
   return `Vote on the next Survivor night (${list})${v.deadline ? ` by ${weekdayShort(todayET(new Date(v.deadline)))} 9 PM` : ''}:`;
 }
 
-/* ── after voting: where it stands ────────────────────────────────────── */
+/* ── after voting: where it stands ──────────────────────────────────── */
 
-function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, busy, eps, act, onChange }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; t: ReturnType<typeof tally>; waiting: string[]; me: string; answered: number;
+function Results({ s, votes, roster, me, answered, canLock, busy, eps, act, onChange }: {
+  s: VotingS; votes: Vote[]; roster: Roster; me: string; answered: number;
   canLock: boolean; busy: boolean; eps: number; act: Act; onChange: () => void;
 }) {
+  const { viewing: v, nights: t, waitingOn: waiting, bar } = s;
   const leader = t[0];
-  const allIn = waiting.length === 0;
+  const allIn = s.everyoneVoted;
   return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Your votes are in</h2><span className="pill"><i />Poll open</span></div>
@@ -501,7 +509,7 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
       <p className="lede">{allIn ? 'Everyone has voted.'
         : <>Votes are due <b>{v.deadline ? deadlineLabel(v.deadline) : 'soon'}</b>. If everyone votes and one night is ahead, it locks itself — otherwise {v.created_by} picks.</>}</p>
       <div className="facts">
-        <span className="num">{roster.voters.length - waiting.length} of {roster.voters.length} voted</span>
+        <span className="num">{s.voted} of {s.voters} voted</span>
         {waiting.length > 0 && <span>Waiting on <b>{waiting.join(', ')}</b></span>}
       </div>
     </section>
@@ -527,8 +535,8 @@ function Results({ v, votes, roster, bar, t, waiting, me, answered, canLock, bus
 
 /** Each night ranked, with team dots; tap one to see everyone's answer team by team. */
 function NightRows({ t, votes, roster, me, tag }: {
-  t: ReturnType<typeof tally>; votes: Vote[]; roster: Roster; me: string | null;
-  tag: (row: ReturnType<typeof tally>[number], i: number) => string | null;
+  t: NightTally[]; votes: Vote[]; roster: Roster; me: string | null;
+  tag: (row: NightTally, i: number) => string | null;
 }) {
   const word = { y: 'Yes', m: 'Maybe', n: 'No' } as const;
   const [open, setOpen] = useState<string | null>(null);
@@ -561,7 +569,7 @@ function NightRows({ t, votes, roster, me, tag }: {
 }
 
 function OptionCard({ row, votes, roster, people, me, lead, canLock, busy, onVote, onLock, lockLabel = 'Lock this one', pickLabel }: {
-  row: ReturnType<typeof tally>[number]; votes: Vote[]; roster: Roster; people: string[]; me: string | null; lead: boolean; canLock: boolean; busy: boolean;
+  row: NightTally; votes: Vote[]; roster: Roster; people: string[]; me: string | null; lead: boolean; canLock: boolean; busy: boolean;
   onVote?: (a: Answer) => void; onLock: () => void; lockLabel?: string;
   pickLabel?: string; // shown right on the card (votes are in, someone picks) instead of tucked in the tray
 }) {
@@ -645,28 +653,24 @@ function AddNight({ v, busy, onAdd, onCancel }: { v: V; busy: boolean; onAdd: (o
 
 /* ── poll closed, nothing cleared the bar ────────────────────────────── */
 
-function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, onStart }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; canLock: boolean; busy: boolean; act: Act; onReopen: () => void; onAdd: () => void; onStart: () => void;
+function Closed({ s, votes, roster, canLock, busy, act, onReopen, onAdd, onStart }: {
+  s: ClosedS; votes: Vote[]; roster: Roster; canLock: boolean; busy: boolean; act: Act; onReopen: () => void; onAdd: () => void; onStart: () => void;
 }) {
-  const today = todayET();
-  const t = tally(v.options.filter(o => o.date >= today), votes, roster);
-  const top = topNights(t);
-  const missed = waitingOn(v.options, votes, roster);
-  const voted = roster.voters.length - missed.length;
+  const { viewing: v, nights: t, waitingOn: missed, voted, bar } = s;
   const lock = (o: ViewingOption, anyway: boolean) => {
     if (sure(`Lock ${dayLabel(o.date)}${o.time ? ` at ${timeLabel(o.time)}` : ''}${anyway ? ' anyway' : ''}`)) act('lock', { option_id: o.id }, `Set: ${dayLabel(o.date)}.`);
   };
   // at least one night cleared the bar, but it wasn't a clean sweep (people didn't vote, or a tie): someone picks
-  if (top.length) return (<>
+  if (s.phase === 'needs-pick') return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill"><i />Votes are in</span></div>
       <h2 className="title">{canLock ? 'Pick the night' : `${v.created_by} picks the night`}</h2>
-      <p className="lede">{leadLine(top, roster.teams.length)} · {voted} of {roster.voters.length} voted</p>
-      {missed.length > 0 && <p className="note" style={{ marginTop: 8 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></p>}
-      {!canLock && <p className="note" style={{ marginTop: 8 }}>It didn’t lock itself because {missed.length ? 'not everyone voted' : 'no single night was ahead'}.</p>}
+      <p className="lede">{s.summary}</p>
+      {missed.length > 0 && <p className="note" style={{ marginTop: 8 }}>Didn’t finish voting: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></p>}
+      {!canLock && <p className="note" style={{ marginTop: 8 }}>It didn’t lock itself because {s.didntLock === 'not-everyone-voted' ? 'not everyone voted' : 'no single night was ahead'}.</p>}
     </section>
     {t.map(row => (
-      <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={top.includes(row) && top.length === 1}
+      <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={s.top.includes(row) && s.top.length === 1}
         canLock={canLock} busy={busy}
         pickLabel={canLock && row.clears ? `Pick ${weekdayShort(row.option.date)}${row.option.time ? ` ${timeLabel(row.option.time)}` : ''}` : undefined}
         lockLabel={`Lock ${weekdayShort(row.option.date)} anyway`}
@@ -678,8 +682,8 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
   return (<>
     <section className="card hi">
       <div className="hrow"><h2 className="eyebrow">Next Survivor night</h2><span className="pill grey">Poll closed</span></div>
-      <h2 className="title">No night got {bar} of {roster.teams.length} teams</h2>
-      <p className="lede">{v.created_by}’s poll · {missed.length === 0 ? `all ${roster.voters.length} voted` : `${voted} of ${roster.voters.length} voted`}</p>
+      <h2 className="title">No night got {bar} of {s.teams} teams</h2>
+      <p className="lede">{v.created_by}’s poll · {missed.length === 0 ? `all ${s.voters} voted` : `${voted} of ${s.voters} voted`}</p>
     </section>
     {t.map(row => (
       <OptionCard key={row.option.id} row={row} votes={votes} roster={roster} people={[]} me={null} lead={false} canLock={canLock} busy={busy}
@@ -695,15 +699,10 @@ function Closed({ v, votes, roster, bar, canLock, busy, act, onReopen, onAdd, on
 
 /* ── locked ──────────────────────────────────────────────────────────── */
 
-function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock, busy, act, onPick }: {
-  v: V; votes: Vote[]; roster: Roster; bar: number; places: string[]; addresses: Record<string, string>; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
+function Locked({ s, today, votes, roster, places, addresses, who, people, canLock, busy, act, onPick }: {
+  s: SetS; today: string; votes: Vote[]; roster: Roster; places: string[]; addresses: Record<string, string>; who: Who | null; people: string[]; canLock: boolean; busy: boolean; act: Act; onPick: (w: Who) => void;
 }) {
-  const date = v.lock_date!;
-  const going = goingList(v, votes, roster);
-  const coming = going.filter(g => g.s === 'in');
-  const unsure = going.filter(g => g.s === 'unsure');
-  const cant = going.filter(g => g.s === 'out');
-  const inTeams = teamsIn(coming.map(g => g.name), roster);
+  const { viewing: v, date, going, coming, unsure, out: cant, teamsIn: inTeams, bar, why } = s;
   const [eps, setEps] = useState(v.episodes);
   useEffect(() => setEps(v.episodes), [v.episodes]);
   const [other, setOther] = useState('');
@@ -714,17 +713,6 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
   const [showVotes, setShowVotes] = useState(false);
   const votesRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (showVotes) votesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [showVotes]);
-  // why this night: its team count, whether it beat the rest, and turnout (only for a night that came from a poll)
-  const why = (() => {
-    const w = winnerOption(v);
-    if (!w) return null;
-    const t = tally(v.options, votes, roster);
-    const r = t.find(x => x.option.id === w.id);
-    if (!r) return null;
-    const best = t.filter(x => x !== r).every(x => x.teamsIn.length < r.teamsIn.length);
-    const voted = roster.voters.filter(x => votes.some(y => y.person === x.name)).length;
-    return `${r.teamsIn.length} of ${roster.teams.length} teams said Yes${best && t.length > 1 ? ' — the most of any night' : ''} · ${voted} of ${roster.voters.length} voted`;
-  })();
   const [newDate, setNewDate] = useState(date);
   const [newTime, setNewTime] = useState<string | null>(v.lock_time);
   const openMove = () => { setNewDate(date); setNewTime(v.lock_time); setMoving(true); };
@@ -736,9 +724,9 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
   const [apple, setApple] = useState(true); // Apple Maps on iPhone/iPad/Mac, Google Maps elsewhere
   useEffect(() => { setApple(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)); }, []);
   const dest = address ?? (v.place && !isPreset ? v.place : null);
-  const mine = going.filter(g => people.includes(g.name));
+  const mine = s.mine;
   const anyUnsure = mine.some(g => g.s === 'unsure');
-  const tonight = date === todayET();
+  const tonight = date === today;
   const shareText = `Survivor night: ${weekdayLong(date)}, ${dayLabel(date).split(', ')[1]}${v.lock_time ? ` at ${timeLabel(v.lock_time).replace(':00', '')}` : ''}${v.place ? ` at ${v.place}` : ''}.`;
   const names = (gs: typeof going) => gs.map(g => `${g.name}${g.s === 'unsure' && g.said === 'm' ? ' (said Maybe)' : ''}${g.by !== 'vote' && g.by !== g.name ? ` (by ${g.by})` : ''}`).join(', ');
 
@@ -759,15 +747,13 @@ function Locked({ v, votes, roster, bar, places, addresses, who, people, canLock
       </div>
 
       {showVotes && v.options.length > 0 && (() => {
-        const t = tally(v.options, votes, roster);
-        const picked = winnerOption(v);
-        const missed = roster.voters.map(x => x.name).filter(n => !votes.some(x => x.person === n));
+        const { nights: t, picked, waitingOn: missed } = s;
         return (
           <div ref={votesRef} className="box" aria-label="How everyone voted" style={{ scrollMarginTop: 12 }}>
             <div className="hrow"><div className="t">How everyone voted</div><span className="note">needed {bar} of {roster.teams.length} teams</span></div>
             <div className="s">{v.created_by}’s poll · tap a night to see who said what.</div>
             <NightRows t={t} votes={votes} roster={roster} me={who?.me ?? null} tag={(row) => (picked && row.option.id === picked.id ? 'Picked' : null)} />
-            {missed.length > 0 && <div className="s" style={{ marginTop: 10 }}>Didn’t vote: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></div>}
+            {missed.length > 0 && <div className="s" style={{ marginTop: 10 }}>Didn’t finish voting: <b style={{ color: 'var(--text)' }}>{and(missed)}</b></div>}
           </div>
         );
       })()}
