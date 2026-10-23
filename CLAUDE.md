@@ -49,7 +49,7 @@ lib/data.ts   ── getSeasons() / getSeasonPayload(season) — assemble payloa
         ▼
 app/api/season/[season]  ── returns a season's full payload (?sync=1 bypasses cache)
         ▼
-app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Contestants / Stats / History
+app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Players / Draft / Stats / History (the tab row fades at the right edge while more tabs are off-screen)
 ```
 
 ## Season lifecycle — 100% in Google Sheets
@@ -384,7 +384,9 @@ ahead of the scores at the latest week (that player still counts as in).
   `app/RevealSplash.tsx` ("Reading the votes…" beat, then headline / The tribe has spoken / top scorer / top
   team) → rows slide (FLIP) and totals count up to the new week; cookie moves forward. One week per reveal.
 - **Dashboard**: the whole payload goes through `shielded()` before the week stepper, so every tab,
-  `?week=N` and "of Week N" stop at the last revealed week; the same strip + splash sit under the week bar.
+  `?week=N` and "of Week N" stop at the last revealed week. The big strip sits under the week bar on the
+  Leaderboard tab only; on every tab, the week bar's next arrow becomes an orange "Week N ›" pill (at the
+  latest week) that opens the same splash (2026-10-23 — the strip on every tab was too much).
 - **Push**: no recap in the body. **Link preview** (`app/s/[season]/opengraph-image.tsx`): live seasons say
   "Scores through Week N · no spoilers", no leader.
 - An Out cell without a week number ("x") can't be shielded (no week to hide it behind) — type the week.
@@ -440,6 +442,12 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
   ("Megan + Jake + Colt" → teal, "Will" → purple), else a spare color picked from the name. No position
   argument — the old index fallback gave one team different colors on different screens. Tests:
   `lib/teamColors.test.ts`.
+- **Short team names** (`lib/teamNames.ts`, 2026-10-23): `shortName(team)` for tight spots only — homepage
+  standings, dashboard standings/legends/recap tiles, Teams glance tiles, Stats tiles, Draft board headers,
+  Players chips and rows. League nicknames first ("Will + Kathleen + Anna + Dan" → **WAK'D**, "Will + Kathleen +
+  Anna" → WAK), else names ≤20 chars unchanged, else "First +N". Full names stay on team cards, titles,
+  History and past seasons. The sheet keeps the full name (voters and colors match by the people in it) —
+  add new nicknames to `NICKNAMES`, not the sheet. Tests: `lib/teamNames.test.ts`.
 
 ## Homepage (`app/page.tsx`)
 
@@ -486,7 +494,7 @@ declared once as CSS variables in `dash/styles.ts`).
 2. **Teams** (`dash/Teams.tsx`, `?team=<name>` opens that team's breakdown) — players left per team, Find a player, every roster as name chips
    (out = dashed + crossed out); tap a name → player card; "Team breakdown" → where the points came
    from + team points by week.
-3. **Contestants** (`dash/Contestants.tsx`) — compact list (sort Total / Best week / Name, team
+3. **Players** (`dash/Contestants.tsx`, still `?tab=contestants`; renamed on screen 2026-10-23) — compact list (sort Total / Best week / Name, team
    filter), still in first, out folded away; tap a row → player card.
 4. **Draft** (`dash/Draft.tsx`, only when the Draft tab is published) — the whole board on one
    screen (rounds down, teams across, snake arrows), then steals & busts (pick # vs points; steal /
