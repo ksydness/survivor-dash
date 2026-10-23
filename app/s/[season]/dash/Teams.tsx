@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
 import { Dot, IconSearch, PlayerCard, WeekBars } from './bits';
 import { colorFor, ordinal, rosterOf, teamSeries } from './model';
+import { shortName } from '@/lib/teamNames';
 
 /**
  * Teams: at a glance → players left per team and every roster as name chips.
@@ -36,7 +37,7 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
         {teams.map(t => (
           <div key={t.team} className="gl" style={{ borderTopColor: t.color }}>
             <b className="num">{t.left}<small>/{t.roster.length}</small></b>
-            <span>{t.team}</span>
+            <span>{shortName(t.team)}</span>
           </div>
         ))}
       </section>
