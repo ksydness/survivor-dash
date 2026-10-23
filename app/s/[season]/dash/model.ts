@@ -3,18 +3,9 @@
 import type { SeasonPayload, Contestant } from '@/lib/types';
 
 /* ── team colors ── */
-// Stable team colors. Add new teams here if names change between seasons.
-const TEAM_COLORS: Record<string, string> = {
-  'Kenny + Lena': '#fb7185',
-  'Tony + Karina': '#f59e0b',
-  'Megan + Jake': '#2dd4bf',
-  'Will + Kathleen + Anna': '#a78bfa',
-  'Will': '#a78bfa',  // S46 precursor of Will + Kathleen + Anna — same lineage, same color
-  'Megan + Jake + Colt': '#2dd4bf',           // S51 — Megan + Jake lineage
-  'Will + Kathleen + Anna + Dan': '#a78bfa',  // S51 — Will + Kathleen + Anna lineage
-};
-const FALLBACK = ['#fb7185', '#f59e0b', '#2dd4bf', '#a78bfa', '#60a5fa', '#f472b6'];
-export function colorFor(team: string, i = 0) { return TEAM_COLORS[team] ?? FALLBACK[i % FALLBACK.length]; }
+// One place for every screen: lib/teamColors.ts (keyed by name, with lineage — no per-season edits).
+import { colorFor } from '@/lib/teamColors';
+export { colorFor };
 /** team color at low alpha, for tinted fills (draft cells) */
 export function tint(hex: string, alpha = 0.14) {
   const n = parseInt(hex.slice(1), 16);
@@ -74,14 +65,6 @@ export function asOf(d: SeasonPayload, k: number): SeasonPayload {
 }
 
 /* ── teams & players ── */
-/** team order + color index, in standings order (keeps fallback colors stable per season) */
-export function teamIndex(d: SeasonPayload) {
-  const idx: Record<string, number> = {};
-  d.teamTotals.forEach((t, i) => { idx[t.team] = i; });
-  return idx;
-}
-export const teamColor = (d: SeasonPayload, team: string) => colorFor(team, teamIndex(d)[team] ?? 0);
-
 /** still-in contestants first (by points), eliminated sink to the bottom */
 export const rosterOf = (d: SeasonPayload, team: string) => d.contestants.filter(c => c.team === team)
   .sort((a, b) => Number(!!a.eliminated) - Number(!!b.eliminated) || b.total - a.total);
@@ -126,7 +109,7 @@ export function standings(d: SeasonPayload): Standing[] {
     const r = d.ranks[t.team] ?? [];
     const move = r.length >= 2 ? r[r.length - 2] - r[r.length - 1] : null;
     return {
-      team: t.team, total: t.total, rank, color: colorFor(t.team, i),
+      team: t.team, total: t.total, rank, color: colorFor(t.team),
       tied: tt.filter(x => (x.rank ?? -1) === rank).length > 1,
       move, back: r2(lead - t.total),
       week: li === null ? null : teamWeekPts(d, t.team, li),
