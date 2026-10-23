@@ -9,14 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { LEAGUE, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/draftConfig';
-
-// ── team colors (shared with the dashboard) ──
-const PRESET: Record<string, string> = {
-  'Kenny + Lena': '#fb7185', 'Tony + Karina': '#f59e0b',
-  'Megan + Jake': '#2dd4bf', 'Will + Kathleen + Anna': '#a78bfa',
-};
-const FALLBACK = ['#fb7185', '#f59e0b', '#2dd4bf', '#a78bfa', '#60a5fa', '#f472b6'];
-const colorFor = (t: string, i = 0) => PRESET[t] ?? FALLBACK[i % FALLBACK.length];
+import { colorFor } from '@/lib/teamColors'; // team colors: same module as the dashboard
 
 interface LivePick { overall: number; round: number; teamIndex: number; contestant: string; }
 interface LiveState {
@@ -357,7 +350,7 @@ export default function DraftRoom({ season }: { season: number }) {
             {teams.map((t, i) => (
               <button key={t} className="btn lobbybtn"
                 onClick={() => chooseRole(commishKey ? { kind: 'commish', teamIndex: i } : { kind: 'team', index: i })}>
-                <span className="dot lg" style={{ background: colorFor(t, i) }} />{t}
+                <span className="dot lg" style={{ background: colorFor(t) }} />{t}
               </button>
             ))}
             {commishKey
@@ -372,10 +365,10 @@ export default function DraftRoom({ season }: { season: number }) {
 
   const roleLabel = role.kind === 'commish'
     ? (role.teamIndex != null
-        ? <>🎛 <span className="dot" style={{ background: colorFor(teams[role.teamIndex] ?? '', role.teamIndex) }} /> {teams[role.teamIndex] ?? 'Commissioner'}</>
+        ? <>🎛 <span className="dot" style={{ background: colorFor(teams[role.teamIndex] ?? '') }} /> {teams[role.teamIndex] ?? 'Commissioner'}</>
         : <>🎛 Commissioner</>)
     : role.kind === 'watch' ? <>👀 Watching</>
-    : <><span className="dot" style={{ background: colorFor(teams[role.index] ?? '', role.index) }} /> {teams[role.index] ?? 'Team'}</>;
+    : <><span className="dot" style={{ background: colorFor(teams[role.index] ?? '') }} /> {teams[role.index] ?? 'Team'}</>;
 
   return (
     <Shell sub={`Live Snake Draft · ${clockSecs}s clock`}>
@@ -383,9 +376,9 @@ export default function DraftRoom({ season }: { season: number }) {
 
       {splash && (
         <div className="splash" key={splash.overall}>
-          <div className="splashcard" style={{ borderColor: colorFor(teams[splash.teamIndex], splash.teamIndex) }}>
+          <div className="splashcard" style={{ borderColor: colorFor(teams[splash.teamIndex]) }}>
             <div className="sp-label">Round {splash.round} · Pick {splash.overall + 1}</div>
-            <div className="sp-team" style={{ color: colorFor(teams[splash.teamIndex], splash.teamIndex) }}>{teams[splash.teamIndex]}</div>
+            <div className="sp-team" style={{ color: colorFor(teams[splash.teamIndex]) }}>{teams[splash.teamIndex]}</div>
             <div className="sp-name">{splash.contestant}</div>
           </div>
         </div>
@@ -393,9 +386,9 @@ export default function DraftRoom({ season }: { season: number }) {
 
       {turnSplash && !splash && (
         <div className="splash" key={`turn-${overall}`}>
-          <div className="splashcard" style={{ borderColor: colorFor(teams[myTeamIndex] ?? '', myTeamIndex) }}>
+          <div className="splashcard" style={{ borderColor: colorFor(teams[myTeamIndex] ?? '') }}>
             <div className="sp-label">Round {currentRound} · Pick {overall + 1}</div>
-            <div className="sp-team" style={{ color: colorFor(teams[myTeamIndex] ?? '', myTeamIndex) }}>{teams[myTeamIndex]}</div>
+            <div className="sp-team" style={{ color: colorFor(teams[myTeamIndex] ?? '') }}>{teams[myTeamIndex]}</div>
             <div className="sp-name">You’re on the clock!</div>
           </div>
         </div>
@@ -445,7 +438,7 @@ export default function DraftRoom({ season }: { season: number }) {
               <ol className="orderlist">
                 {order.map((ti, i) => (
                   <li key={ti}><span className="ord">{i + 1}</span>
-                    <span className="dot" style={{ background: colorFor(teams[ti], ti) }} />{teams[ti]}
+                    <span className="dot" style={{ background: colorFor(teams[ti]) }} />{teams[ti]}
                     {isCommish && (
                       <span className="ordbtns">
                         <button className="step sm" onClick={() => moveOrder(i, -1)} disabled={i === 0} aria-label="move up">▲</button>
@@ -487,11 +480,11 @@ export default function DraftRoom({ season }: { season: number }) {
       )}
 
       {phase === 'drafting' && onClockTeam >= 0 && (
-        <div className="panel clockpanel" style={{ borderColor: colorFor(teams[onClockTeam], onClockTeam) }}>
+        <div className="panel clockpanel" style={{ borderColor: colorFor(teams[onClockTeam]) }}>
           <div className="onclock">
             <div className="oc-label">Round {currentRound} · Pick {overall + 1} of {totalPicks}{paused ? ' · PAUSED' : ''}</div>
-            <div className="oc-team" style={{ color: colorFor(teams[onClockTeam], onClockTeam) }}>
-              <span className="dot lg" style={{ background: colorFor(teams[onClockTeam], onClockTeam) }} />
+            <div className="oc-team" style={{ color: colorFor(teams[onClockTeam]) }}>
+              <span className="dot lg" style={{ background: colorFor(teams[onClockTeam]) }} />
               {teams[onClockTeam]} <span className="dim"> is on the clock</span>
             </div>
           </div>
@@ -518,7 +511,7 @@ export default function DraftRoom({ season }: { season: number }) {
             {available.map(name => (
               <button key={name} className={`pick ${myTurn ? '' : 'inactive'}`} disabled={!myTurn}
                 onClick={() => act('pick', { teamIndex: role.kind === 'team' ? role.index : onClockTeam, contestant: name })}
-                style={{ borderColor: colorFor(teams[onClockTeam] || '', onClockTeam) }}>
+                style={{ borderColor: colorFor(teams[onClockTeam] || '') }}>
                 <span>{name}</span>{myTurn && <span className="draftbtn">Draft +</span>}
               </button>
             ))}
@@ -533,7 +526,7 @@ export default function DraftRoom({ season }: { season: number }) {
           <div className="boardwrap">
             <table className="board">
               <thead><tr><th></th>{order.map((ti) => (
-                <th key={ti}><span className="dot" style={{ background: colorFor(teams[ti], ti) }} />{teams[ti]}</th>
+                <th key={ti}><span className="dot" style={{ background: colorFor(teams[ti]) }} />{teams[ti]}</th>
               ))}</tr></thead>
               <tbody>
                 {Array.from({ length: rounds }, (_, r) => {
@@ -547,8 +540,8 @@ export default function DraftRoom({ season }: { season: number }) {
                         return (
                           <td key={ti} className={isCurrent ? 'cell now' : 'cell'}
                             style={{
-                              borderColor: pk ? colorFor(teams[ti], ti) : undefined,
-                              outlineColor: isCurrent ? colorFor(teams[ti], ti) : undefined,
+                              borderColor: pk ? colorFor(teams[ti]) : undefined,
+                              outlineColor: isCurrent ? colorFor(teams[ti]) : undefined,
                             }}>
                             {pk ? pk.contestant : (isCurrent ? '⏳' : '')}
                           </td>
@@ -571,7 +564,7 @@ export default function DraftRoom({ season }: { season: number }) {
             <div className="rosters">
               {order.map((ti) => (
                 <div key={ti} className="rcard">
-                  <h3><span className="dot" style={{ background: colorFor(teams[ti], ti) }} />{teams[ti]}</h3>
+                  <h3><span className="dot" style={{ background: colorFor(teams[ti]) }} />{teams[ti]}</h3>
                   <ol>{picks.filter(p => p.teamIndex === ti).sort((a, b) => a.round - b.round)
                     .map(p => <li key={p.overall}>{p.contestant}</li>)}</ol>
                 </div>
