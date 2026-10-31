@@ -264,7 +264,9 @@ the sheet only supplies the roster (current season's `Teams` + the `Voters` colu
   "You're in ✓" / "You can't make it" and the chosen button is a soft green/red tint with a ✓ (not the orange
   CTA gradient); the homepage button becomes a quiet "You're in ✓ · Details". Every successful action calls
   `router.refresh()` so the homepage held in the client router cache doesn't show the old answer.
-  A locked night stays "next" through its date; then the homepage goes back to "Nothing on the calendar".
+  A locked night stays "next" until its start time (Time TBD: through its date), then the homepage goes back to
+  "Nothing on the calendar" so the next poll can start during the night itself (`isCurrent`, 2026-10-30). The row
+  stays `locked`, so the calendar feed keeps it.
 - **Places** (2026-10-14): the hub workbook (same one as the Seasons tab) has a **Places** tab
   (`Name | Address`), found by tab name via `findPublishedTab(SEASONS_CSV_URL, 'Places')` in
   `getPlaces()` (`lib/data.ts`) — no registry column or env var. Its names are the "where" quick picks; the

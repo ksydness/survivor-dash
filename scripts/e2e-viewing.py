@@ -8,7 +8,7 @@ touches the real poll or pings anyone:
   3. python3 scripts/e2e-viewing.py      (fresh server each run — the memory store keeps state)
 
 Checks state on the server AND that what each tap reveals is actually on screen (not below the fold).
-Dates assume Oct 30/31 2026 are inside the poll form's 5-week calendar — bump them for later runs.
+Dates assume Nov 6/7 2026 are inside the poll form's 5-week calendar — bump them for later runs.
 """
 import json, urllib.request
 from playwright.sync_api import sync_playwright
@@ -46,12 +46,12 @@ with sync_playwright() as p:
     k.get_by_role('button', name='Start a poll').tap(); k.wait_for_timeout(500)
     k.get_by_role('button', name='Karina').first.tap(); k.wait_for_timeout(300)
     if k.get_by_role('button', name='Just me').count(): k.get_by_role('button', name='Just me').tap()
-    k.get_by_role('button', name='Fri, Oct 30').tap(); k.get_by_role('button', name='Sat, Oct 31').tap()
+    k.get_by_role('button', name='Fri, Nov 6').tap(); k.get_by_role('button', name='Sat, Nov 7').tap()
     k.wait_for_timeout(300)
-    k.locator('select[aria-label="Fri, Oct 30 time 1"]').select_option('18:30')
-    k.locator('select[aria-label="Sat, Oct 31 time 1"]').select_option('13:00')
+    k.locator('select[aria-label="Fri, Nov 6 time 1"]').select_option('18:30')
+    k.locator('select[aria-label="Sat, Nov 7 time 1"]').select_option('13:00')
     k.get_by_role('button', name='+ time').last.tap()
-    k.locator('select[aria-label="Sat, Oct 31 time 2"]').select_option('18:00')
+    k.locator('select[aria-label="Sat, Nov 7 time 2"]').select_option('18:00')
     k.get_by_role('button', name='Start the poll').tap(); k.wait_for_timeout(1500)
     st=state(); ok(st['viewing'] and st['viewing']['status']=='polling' and len(st['viewing']['options'])==3, 'A start poll via form → 3 options')
     ok(in_view(k, k.get_by_text('The poll is live')), 'A flash visible after starting')
@@ -64,7 +64,7 @@ with sync_playwright() as p:
     k.get_by_role('button', name='Change my votes').tap(); k.wait_for_timeout(500)
     ok(in_view(k, k.get_by_text('Pick a night for the next')), 'A change my votes returns to the poll (top)')
     ids={ (o['date'],o['time']):o['id'] for o in state()['viewing']['options']}
-    fri,s1,s6=ids[('2026-10-30','18:30')],ids[('2026-10-31','13:00')],ids[('2026-10-31','18:00')]
+    fri,s1,s6=ids[('2026-11-06','18:30')],ids[('2026-11-07','13:00')],ids[('2026-11-07','18:00')]
 
     # ── B. Kenny (phone also votes for Lena) sees the poll, votes through UI
     kn=phone('Kenny',['Lena'])
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     ok(k.get_by_role('button', name='Pick Fri 6:30 PM').count()==1 and k.get_by_role('button', name='Pick Sat 6:00 PM').count()==1, 'C Karina has Pick buttons on both tied nights')
     k.get_by_role('button', name='Pick Fri 6:30 PM').tap(); k.wait_for_timeout(1500)
     st=state(); ok(st['viewing']['status']=='locked' and st['viewing']['locked_by']=='Karina', 'C Karina picked → locked')
-    ok(in_view(k, k.get_by_text('Set: Fri, Oct 30')), 'C flash visible after pick')
+    ok(in_view(k, k.get_by_text('Set: Fri, Nov 6')), 'C flash visible after pick')
 
     # ── D. set night as Kenny
     kn.goto(U+'/viewing'); kn.wait_for_timeout(1500)
@@ -128,9 +128,9 @@ with sync_playwright() as p:
     k.goto(U+'/viewing'); k.wait_for_timeout(1500)
     k.get_by_role('button', name='Change date or time').tap(); k.wait_for_timeout(400)
     ok(in_view(k, k.get_by_text('Move it').first), 'D Move it box visible')
-    k.locator('.box input[type=date]').fill('2026-10-31'); k.get_by_role('button', name='Move it', exact=True).tap(); k.wait_for_timeout(1500)
-    ok(state()['viewing']['lock_date']=='2026-10-31', 'D moved to Oct 31')
-    ok(in_view(k, k.get_by_text('Moved to Sat, Oct 31')), 'D move flash visible')
+    k.locator('.box input[type=date]').fill('2026-11-07'); k.get_by_role('button', name='Move it', exact=True).tap(); k.wait_for_timeout(1500)
+    ok(state()['viewing']['lock_date']=='2026-11-07', 'D moved to Nov 7')
+    ok(in_view(k, k.get_by_text('Moved to Sat, Nov 7')), 'D move flash visible')
     k.get_by_role('button', name='Add to calendar').tap(); k.wait_for_timeout(400)
     ok(in_view(k, k.get_by_text('Subscribe once').first) or in_view(k, k.get_by_text('subscribed').first), 'D Add to calendar box visible')
     # cancel → idle
