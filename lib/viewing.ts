@@ -219,9 +219,16 @@ const askUnsure = (rsvp: Record<string, Rsvp>, people: string[], q: string) => {
   return rsvp[mine[0]]?.said === 'm' ? ` You said Maybe — ${q}` : ` ${q[0].toUpperCase()}${q.slice(1)}`;
 };
 
-/** Is this row still the "next viewing"? (a past night or a closed poll whose nights all passed is history) */
-function isCurrent(r: Row, today: string): boolean {
-  if (r.status === 'locked') return !!r.lock_date && r.lock_date >= today;
+/**
+ * Is this row still the "next viewing"? (a past night or a closed poll whose nights all passed is history)
+ * A set night with a start time stops being "next" once it has started, so the group can start the next poll
+ * during the night itself; a Time TBD night stays through its date. (It stays `locked`, so the calendar keeps it.)
+ */
+function isCurrent(r: Row, today: string, now = new Date()): boolean {
+  if (r.status === 'locked') {
+    if (!r.lock_date || r.lock_date < today) return false;
+    return !(r.lock_date === today && r.lock_time && etToUtc(r.lock_date, r.lock_time) <= now);
+  }
   if (r.status === 'closed') return (r.options ?? []).some(o => o.date >= today);
   return r.status === 'polling';
 }
