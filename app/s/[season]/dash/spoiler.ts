@@ -6,7 +6,7 @@
 // Final seasons aren't shielded. Nothing is re-scored: the shield is the week stepper's asOf().
 // Styles for the reveal strip live in app/RevealSplash.tsx (SHIELD_CSS), shared by homepage + dashboard.
 import type { SeasonPayload } from '@/lib/types';
-import { asOf, recap, weekLabel } from './model';
+import { asOf, recap, standings, weekLabel, type Standing } from './model';
 
 export const seenCookie = (season: number) => `survivor-seen-s${season}`;
 const YEAR = 60 * 60 * 24 * 365;
@@ -83,7 +83,7 @@ export function seenAsOf(d: SeasonPayload, k: number): SeasonPayload {
 /** the season as this phone may see it */
 export const shielded = (d: SeasonPayload, s: Shield) => (d.meta.status === 'active' ? seenAsOf(d, s.k) : d);
 
-/** what the reveal splash says for scored_weeks position k */
+/** what the reveal splash shows for scored_weeks position k (also used to replay an already-revealed week) */
 export interface RevealInfo {
   week: number;
   headline: string;
@@ -91,6 +91,8 @@ export interface RevealInfo {
   topScorer: string | null;   // "Aubry · 14 pts"
   topTeam: string | null;     // "Tony + Karina · 22 pts"
   more: number;               // weeks still hidden after this one
+  before: Standing[];         // the board going in (previous week, or everyone at 0)
+  after: Standing[];          // the board after this week — the splash counts from one to the other
 }
 export function revealInfo(d: SeasonPayload, k: number): RevealInfo {
   const sw = d.meta.scored_weeks ?? [];
@@ -107,5 +109,7 @@ export function revealInfo(d: SeasonPayload, k: number): RevealInfo {
     topScorer: rc?.topScorer ? names(rc.topScorer.names, rc.topScorer.pts) : null,
     topTeam: rc?.topTeam ? names(rc.topTeam.names, rc.topTeam.pts) : null,
     more: sw.length - 1 - k,
+    before: standings(seenAsOf(d, k - 1)),
+    after: standings(at),
   };
 }
