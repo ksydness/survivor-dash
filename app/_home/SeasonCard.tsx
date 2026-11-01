@@ -4,9 +4,10 @@
 // week this phone may step through (the last week it revealed, then each hidden week); the card shows
 // the first and a "Week N scores are in · Reveal" strip. Reveal → the full-screen reveal (RevealSplash:
 // the board counts up and re-sorts, chaining through every hidden week) → as each week lands, the card
-// moves to that frame and the cookie moves forward. Nothing here is computed from scores — the frames
-// come from the same standings()/recap() the card always used.
+// moves to that frame and the cookie moves forward; closing the reveal opens the dashboard. Nothing here
+// is computed from scores — the frames come from the same standings()/recap() the card always used.
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { Standing } from '../s/[season]/dash/model';
 import { fmtDelta } from '../s/[season]/dash/model';
@@ -56,6 +57,7 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
   reveals: RevealInfo[];
   hadCookie: boolean;
 }) {
+  const router = useRouter();
   const [i, setI] = useState(0);
   const [splash, setSplash] = useState<RevealInfo[] | null>(null);  // frozen when opened: this week + later hidden ones
   const href = `/s/${season}`;
@@ -146,7 +148,11 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
         </div>
       )}
 
-      {splash && <RevealSplash steps={splash} onStep={landed} onClose={() => setSplash(null)} />}
+      {splash && (
+        // after a reveal people usually want to dig in, so closing it opens the dashboard (Kenny, 2026-11-01)
+        <RevealSplash steps={splash} onStep={landed} onClose={() => router.push(href)}
+          doneLabel={`Open ${name} ›`} stopLabel={`Stop here · open ${name}`} />
+      )}
     </section>
   );
 }

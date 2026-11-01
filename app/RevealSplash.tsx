@@ -127,11 +127,13 @@ const totalsOf = (rows: RevealInfo['after']) => Object.fromEntries(rows.map(r =>
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const fmtGain = (n: number) => (n < 0 ? `−${fmt(-n)}` : `+${fmt(n)}`);
 
-export default function RevealSplash({ steps, onStep, onClose, replay = false }: {
+export default function RevealSplash({ steps, onStep, onClose, replay = false, doneLabel = 'Done', stopLabel = 'Done for now' }: {
   steps: RevealInfo[];                       // the week to reveal, then any later hidden weeks (chained)
   onStep?: (info: RevealInfo) => void;       // a week has landed (write the cookie)
   onClose: () => void;
   replay?: boolean;                          // replaying a revealed week: no cookie, says "Replay"
+  doneLabel?: string;                        // last button (the homepage says "Open Season N ›" — it goes to the dashboard)
+  stopLabel?: string;                        // "stop here" button while more weeks are hidden
 }) {
   const [si, setSi] = useState(0);
   const step = steps[Math.min(si, steps.length - 1)];
@@ -298,9 +300,9 @@ export default function RevealSplash({ steps, onStep, onClose, replay = false }:
                 {next
                   ? <>
                     <button ref={goBtn} type="button" className="rv-go" disabled={!settled} onClick={goNext}>Reveal Week {next.week}</button>
-                    <button type="button" className="rv-later" disabled={!settled} onClick={onClose}>Done for now</button>
+                    <button type="button" className="rv-later" disabled={!settled} onClick={onClose}>{stopLabel}</button>
                   </>
-                  : <button ref={goBtn} type="button" className="rv-go" disabled={!settled} onClick={onClose}>Done</button>}
+                  : <button ref={goBtn} type="button" className="rv-go" disabled={!settled} onClick={onClose}>{doneLabel}</button>}
               </div>
             </div>
           </div>

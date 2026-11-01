@@ -401,7 +401,8 @@ ahead of the scores at the latest week (that player still counts as in).
   one frame per week the phone can step through. While weeks are hidden, the headline slot becomes a
   "Week N scores are in · Reveal" strip (Open button still above the SE fold: 517px at 375×548). Reveal → the
   splash with every remaining hidden week; as each lands the card moves to that frame (behind the overlay) and
-  the cookie moves forward. No second animation on the card after closing.
+  the cookie moves forward. Closing it opens the dashboard (last button "Open Season N ›", mid-chain "Stop here ·
+  open Season N") — after a reveal people want to dig in (Kenny, 2026-11-01). The dashboard's own reveal just closes.
 - **Dashboard**: the whole payload goes through `shielded()` before the week stepper, so every tab,
   `?week=N` and "of Week N" stop at the last revealed week. The big strip sits under the week bar on the
   Leaderboard tab only; on every tab, the week bar's next arrow becomes an orange "Week N ›" pill (at the
