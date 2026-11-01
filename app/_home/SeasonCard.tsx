@@ -2,15 +2,18 @@
 
 // The homepage's current-season card, behind the spoiler shield. The server renders one "frame" per
 // week this phone may step through (the last week it revealed, then each hidden week); the card shows
-// the first and a "Week N scores are in · Reveal" strip. Reveal → splash → the standings slide and
-// count up to the new week, and the cookie moves forward. Nothing here is computed from scores — the
-// frames come from the same standings()/recap() the card always used.
+// the first and a "Week N scores are in · Reveal" strip. Reveal → the full-screen reveal (RevealSplash:
+// the board counts up and re-sorts, chaining through every hidden week) → as each week lands, the card
+// moves to that frame and the cookie moves forward; closing the reveal opens the dashboard. Nothing here
+// is computed from scores — the frames come from the same standings()/recap() the card always used.
 import Link from 'next/link';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import type { Standing } from '../s/[season]/dash/model';
 import { fmtDelta } from '../s/[season]/dash/model';
 import { readSeen, writeSeen, type RevealInfo } from '../s/[season]/dash/spoiler';
 import RevealSplash, { SHIELD_CSS } from '../RevealSplash';
+import { unlockRevealSound } from '@/lib/revealSound';
 import { shortName } from '@/lib/teamNames';
 
 export interface Frame {
@@ -54,10 +57,9 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
   reveals: RevealInfo[];
   hadCookie: boolean;
 }) {
+  const router = useRouter();
   const [i, setI] = useState(0);
-  const [splash, setSplash] = useState<RevealInfo | null>(null);
-  const rowEls = useRef(new Map<string, HTMLElement>());
-  const before = useRef<Map<string, number> | null>(null);
+  const [splash, setSplash] = useState<RevealInfo[] | null>(null);  // frozen when opened: this week + later hidden ones
   const href = `/s/${season}`;
 
   useEffect(() => {
@@ -73,33 +75,12 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
     }
   }, [season, frames, hadCookie]);
 
-  // FLIP: rows slide from where they stood before the reveal to their new places
-  useLayoutEffect(() => {
-    const prev = before.current;
-    if (!prev) return;
-    before.current = null;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    rowEls.current.forEach((el, team) => {
-      const was = prev.get(team);
-      if (was == null) return;
-      const dy = was - el.getBoundingClientRect().top;
-      if (!dy) return;
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${dy}px)`;
-      el.getBoundingClientRect();
-      el.style.transition = 'transform .7s cubic-bezier(.2,.8,.2,1)';
-      el.style.transform = '';
-    });
-  }, [i]);
-
-  function done() {
-    const next = i + 1;
-    const m = new Map<string, number>();
-    rowEls.current.forEach((el, team) => m.set(team, el.getBoundingClientRect().top));
-    before.current = m;
-    writeSeen(season, frames[next].seen);
-    setSplash(null);
-    setI(next);
+  /** a week landed in the reveal: the card (behind it) moves to that week and the cookie follows */
+  function landed(info: RevealInfo) {
+    const j = reveals.findIndex(r => r.week === info.week);
+    if (j < 0 || !frames[j + 1]) return;
+    writeSeen(season, frames[j + 1].seen);
+    setI(n => Math.max(n, j + 1));
   }
 
   const f = frames[Math.min(i, frames.length - 1)];
@@ -120,7 +101,7 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
             <b>Week {nextReveal.week} scores are in</b>
             <span>{f.week !== null ? `Showing through Week ${f.week}.` : 'Nothing shown yet.'} Watched it?</span>
           </span>
-          <button type="button" className="sbtn" onClick={() => setSplash(nextReveal)}>Reveal</button>
+          <button type="button" className="sbtn" onClick={() => { unlockRevealSound(); setSplash(reveals.slice(i)); }}>Reveal</button>
         </div>
       ) : (
         <p className="headline">{f.headline}</p>
@@ -132,7 +113,7 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
           const rankTxt = t.tied ? `T-${t.rank}` : String(t.rank);
           const label = `${t.team}, ${t.tied ? `tied for ${t.rank === 1 ? '1st' : `rank ${t.rank}`}` : `rank ${t.rank}`}, ${t.total} points${t.week !== null ? `, ${fmtDelta(t.week)} this week` : ''}, ${t.left} of ${t.size} players left${mv ? `, ${mv.sr} since last week` : ''}. Open in Teams`;
           return (
-            <Link key={t.team} ref={el => { if (el) rowEls.current.set(t.team, el); else rowEls.current.delete(t.team); }}
+            <Link key={t.team}
               className="row" href={`${href}?tab=teams&team=${encodeURIComponent(t.team)}`} aria-label={label}>
               <span className="rk" aria-hidden>
                 <b className={t.rank === 1 ? 'first' : ''}>{rankTxt}</b>
@@ -167,7 +148,11 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
         </div>
       )}
 
-      {splash && <RevealSplash info={splash} onDone={done} />}
+      {splash && (
+        // after a reveal people usually want to dig in, so closing it opens the dashboard (Kenny, 2026-11-01)
+        <RevealSplash steps={splash} onStep={landed} onClose={() => router.push(href)}
+          doneLabel={`Open ${name} ›`} stopLabel={`Stop here · open ${name}`} />
+      )}
     </section>
   );
 }

@@ -6,7 +6,10 @@ import { Disclosure, Dot, Pips } from './bits';
 import { colorFor, fmtDelta, liveWeek, ordinal, recap, rosterOf, standings, weekLabel } from './model';
 import { shortName } from '@/lib/teamNames';
 
-export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams: (team: string) => void }) {
+export default function Leaderboard({ d, goTeams, onReplay }: {
+  d: SeasonPayload; goTeams: (team: string) => void;
+  onReplay?: () => void;   // replay this week's reveal (e.g. on the TV after your own phone already revealed it)
+}) {
   const rc = recap(d);
   const rows = standings(d);
   const li = liveWeek(d);
@@ -19,7 +22,10 @@ export default function Leaderboard({ d, goTeams }: { d: SeasonPayload; goTeams:
     <>
       {rc && (
         <section className="panel recap">
-          <h2 className="ph">{rc.final ? 'Season recap' : `Week ${rc.week} recap`}</h2>
+          <div className="phrow">
+            <h2 className="ph">{rc.final ? 'Season recap' : `Week ${rc.week} recap`}</h2>
+            {onReplay && <button type="button" className="replay" onClick={onReplay} aria-label={`Replay the Week ${rc.week} reveal`}>▶ Replay reveal</button>}
+          </div>
           <h3>{rc.headline}</h3>
           {rc.body && <p>{rc.body}</p>}
           {(rc.topScorer || rc.topTeam) && (

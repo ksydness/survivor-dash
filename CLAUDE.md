@@ -378,13 +378,31 @@ is the week stepper's `asOf()`, wrapped by `seenAsOf()` for k = -1 ("nothing yet
 ahead of the scores at the latest week (that player still counts as in).
 
 - `app/s/[season]/dash/spoiler.ts` — cookie read/write (never moves backwards), `shieldFor(d, seen)`,
-  `seenAsOf`, `shielded(d, s)`, `revealInfo(d, k)` (headline, who went out, top scorer/team for the splash).
-  The strip's CSS is `SHIELD_CSS` in `app/RevealSplash.tsx` (shared by both pages).
+  `seenAsOf`, `shielded(d, s)`, `revealInfo(d, k)` (headline, who went out, top scorer/team, and the
+  `before`/`after` standings the splash counts between). The strip's CSS is `SHIELD_CSS` in
+  `app/RevealSplash.tsx` (shared by both pages).
+- **The reveal** (`app/RevealSplash.tsx`, leaderboard-first since 2026-11-01 — Kenny: the group plays it on the
+  TV between episodes, and the standings are what people want, not who went home): "Reading the votes…" beat
+  (tap to skip) → the board as it stood going in, "+0" on every row → each team's week counts up **paced by
+  points** (`countMs`: ~110ms a point, ease-out, 0.7–4s; a normal week is ~20 team points, median across
+  S46–S51, so a fixed short count felt like nothing) with rows **overtaking live** as the on-screen numbers pass →
+  lock to the standings' order (ties as `standings()` lists them), leader glow, headline drops in, then Out /
+  Top scorer / Top team underneath (laid out hidden from the start so the board never jumps). ~6.5–7s a week.
+  Every hidden week is passed in at once and **chains**: "Reveal Week N" / "Done for now" — `onStep` fires as
+  each week lands and the page writes the cookie then, so stopping after one keeps the next hidden.
+  Sound (`lib/revealSound.ts`, Web Audio, no files): tick while counting (pitch climbs), hit on landing; every
+  button that opens/continues a reveal calls `unlockRevealSound()` inside its tap (iOS rule); mute is per device
+  (`localStorage survivor-reveal-sound`). Scales to a landscape TV/laptop (`min-width:760px` + 4:3+: sizes from
+  `--rh` = 12vh, full team names) and works mirrored from a phone in portrait (`shortName`). Classes are
+  `rv-*` because the splash renders inside `.home`/`.dash`, whose `.hl`/`.rk`/`.facts` rules would leak in.
+- **Replay**: the Leaderboard recap card has "▶ Replay reveal" for the week being viewed (`replay` mode — writes
+  nothing). For the TV when Kenny's phone already revealed the week he scored.
 - **Homepage**: `app/page.tsx` reads the cookie (`next/headers`) and renders `_home/SeasonCard.tsx` (client) with
   one frame per week the phone can step through. While weeks are hidden, the headline slot becomes a
-  "Week N scores are in · Reveal" strip (Open button still above the SE fold: 517px at 375×548). Reveal →
-  `app/RevealSplash.tsx` ("Reading the votes…" beat, then headline / The tribe has spoken / top scorer / top
-  team) → rows slide (FLIP) and totals count up to the new week; cookie moves forward. One week per reveal.
+  "Week N scores are in · Reveal" strip (Open button still above the SE fold: 517px at 375×548). Reveal → the
+  splash with every remaining hidden week; as each lands the card moves to that frame (behind the overlay) and
+  the cookie moves forward. Closing it opens the dashboard (last button "Open Season N ›", mid-chain "Stop here ·
+  open Season N") — after a reveal people want to dig in (Kenny, 2026-11-01). The dashboard's own reveal just closes.
 - **Dashboard**: the whole payload goes through `shielded()` before the week stepper, so every tab,
   `?week=N` and "of Week N" stop at the last revealed week. The big strip sits under the week bar on the
   Leaderboard tab only; on every tab, the week bar's next arrow becomes an orange "Week N ›" pill (at the

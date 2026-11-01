@@ -13,6 +13,7 @@ import { IconBack, IconNext, IconPrev, IconRefresh, IconRules } from './dash/bit
 import { asOf, weekLabel } from './dash/model';
 import { readSeen, revealInfo, shieldFor, shielded, writeSeen, type RevealInfo } from './dash/spoiler';
 import RevealSplash, { SHIELD_CSS } from '../../RevealSplash';
+import { unlockRevealSound } from '@/lib/revealSound';
 import Leaderboard from './dash/Leaderboard';
 import Teams from './dash/Teams';
 import Contestants from './dash/Contestants';
@@ -27,12 +28,15 @@ const TABS: [Tab, string][] = [
 ];
 const isTab = (v: string | null): v is Tab => !!v && TABS.some(([id]) => id === v);
 
-// extra styles for this page: the fade that says "more tabs this way" and the compact reveal pill in the week bar
+// extra styles for this page: the fade that says "more tabs this way", the compact reveal pill in the week bar, the recap's Replay button
 const PAGE_CSS = `
 .dash .tabsbar::after{content:"";position:absolute;top:0;right:0;bottom:0;width:40px;pointer-events:none;background:linear-gradient(90deg,transparent,var(--bg));transition:opacity .2s}
 .dash .tabsbar.end::after{opacity:0}
 .dash .weekbar .wpill{flex:none;height:36px;margin-right:4px;padding:0 12px;border:0;border-radius:999px;background:linear-gradient(90deg,#f59e0b,#f97316);color:#1c1917;font:inherit;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer}
 .dash .weekbar .wpill:focus-visible{outline:2px solid #fcd34d;outline-offset:2px}
+.dash .recap .phrow{margin-bottom:0;align-items:center}
+.dash .recap .replay{flex:none;height:30px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:transparent;color:var(--soft);font:inherit;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer}
+.dash .recap .replay:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 `;
 
 export default function Dashboard({ season }: { season: number }) {
@@ -45,7 +49,7 @@ export default function Dashboard({ season }: { season: number }) {
   const [hint, setHint] = useState<string | null>(null);
   const tabsRef = useRef<HTMLElement | null>(null);
   const [seenTick, setSeenTick] = useState(0);  // bumps after a reveal so the cookie is re-read
-  const [splash, setSplash] = useState<RevealInfo | null>(null);
+  const [splash, setSplash] = useState<{ steps: RevealInfo[]; replay: boolean } | null>(null);  // frozen when opened
   const [tabsEnd, setTabsEnd] = useState(false);  // scrolled to the last tab → hide the fade
 
   // spoiler shield: a live season only shows the weeks this phone has revealed (see dash/spoiler.ts)
@@ -157,11 +161,24 @@ export default function Dashboard({ season }: { season: number }) {
   const nextHidden = shield?.on ? shield.hidden[0] : null;
   // a newer week is hidden: the big banner sits on the Leaderboard; every tab gets a small "Week N ›" pill in the week bar
   const revealWeek = nextHidden !== null ? weekLabel(data, (data.meta.scored_weeks ?? [])[nextHidden]) : null;
-  function revealed() {
-    if (splash) writeSeen(season, splash.week);
-    setSplash(null);
+  // Reveal = this hidden week and every later one (the splash chains them); Replay = one revealed week again
+  function openReveal() {
+    if (!shield?.on) return;
+    unlockRevealSound();
+    setSplash({ steps: shield.hidden.map(h => revealInfo(data!, h)), replay: false });
+  }
+  function openReplay(pos: number) {
+    unlockRevealSound();
+    setSplash({ steps: [revealInfo(data!, pos)], replay: true });
+  }
+  function landed(info: RevealInfo) {
+    writeSeen(season, info.week);
     setSeenTick(t => t + 1);
-    goTo(null);
+  }
+  function closeReveal() {
+    const wasReplay = splash?.replay;
+    setSplash(null);
+    if (!wasReplay) goTo(null);
   }
   const tabs = TABS.filter(([id]) => id !== 'draft' || !!data.draft);
   const cur: Tab = tab === 'draft' && !data.draft ? 'leaderboard' : tab;
@@ -181,7 +198,7 @@ export default function Dashboard({ season }: { season: number }) {
           <button type="button" className="iconbtn" aria-label="Previous week" disabled={sw.length === 0 || k <= 0} onClick={() => goTo(k - 1)}><IconPrev /></button>
           <div className="lbl" aria-live="polite">{label}{live && <span className="live">Live</span>}{k < last && <span className="sr"> (earlier week)</span>}</div>
           {revealWeek !== null && k >= last
-            ? <button type="button" className="wpill" aria-label={`Week ${revealWeek} scores are in — reveal`} onClick={() => setSplash(revealInfo(data, nextHidden!))}>Week {revealWeek} ›</button>
+            ? <button type="button" className="wpill" aria-label={`Week ${revealWeek} scores are in — reveal`} onClick={openReveal}>Week {revealWeek} ›</button>
             : <button type="button" className="iconbtn" aria-label="Next week" disabled={sw.length === 0 || k >= last} onClick={() => goTo(k + 1 >= last ? null : k + 1)}><IconNext /></button>}
         </nav>
         {k < last && <button type="button" className="latest" onClick={() => goTo(null)}>Back to latest (Week {weekLabel(base, sw[last])}) »</button>}
@@ -193,7 +210,7 @@ export default function Dashboard({ season }: { season: number }) {
               <b>Week {revealWeek} scores are in</b>
               <span>{last >= 0 ? `Showing through Week ${weekLabel(base, sw[last])}.` : 'Nothing shown yet.'} Watched it?</span>
             </span>
-            <button type="button" className="sbtn" onClick={() => setSplash(revealInfo(data, nextHidden))}>Reveal</button>
+            <button type="button" className="sbtn" onClick={openReveal}>Reveal</button>
           </div>
         )}
 
@@ -206,7 +223,7 @@ export default function Dashboard({ season }: { season: number }) {
         </div>
 
         <main>
-          {cur === 'leaderboard' && <Leaderboard d={v} goTeams={team => setTab('teams', team)} />}
+          {cur === 'leaderboard' && <Leaderboard d={v} goTeams={team => setTab('teams', team)} onReplay={sw.length ? () => openReplay(k) : undefined} />}
           {cur === 'teams' && <Teams d={v} focusTeam={focusTeam} />}
           {cur === 'contestants' && <Contestants d={v} />}
           {cur === 'draft' && data.draft && <Draft d={v} />}
@@ -214,7 +231,7 @@ export default function Dashboard({ season }: { season: number }) {
           {cur === 'history' && <History d={v} />}
         </main>
       </div>
-      {splash && <RevealSplash info={splash} onDone={revealed} />}
+      {splash && <RevealSplash steps={splash.steps} replay={splash.replay} onStep={splash.replay ? undefined : landed} onClose={closeReveal} />}
     </div>
   );
 }
