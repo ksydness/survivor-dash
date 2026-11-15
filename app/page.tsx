@@ -74,8 +74,6 @@ export default async function Home() {
   const h = historyModel({ history });
   const champions = h.teams.filter(t => t.titles.length > 0);
   const past = seasons.filter(s => s !== cur);
-  // the History tab lives in any season's dashboard — but a drafting season's page is the draft room
-  const histSeason = seasons.find(s => s.status !== 'drafting')?.season;
 
   return (
     <div className="home">
@@ -107,7 +105,7 @@ export default async function Home() {
           <section className="card titles" aria-labelledby="titles">
             <div className="hrow">
               <h2 id="titles" className="eyebrow">All-time titles</h2>
-              {histSeason != null && <Link href={`/s/${histSeason}?tab=history`}>Full history ›</Link>}
+              <Link href="/history">Full history ›</Link>
             </div>
             <div style={{ marginTop: 8 }}>
               {champions.map(t => (

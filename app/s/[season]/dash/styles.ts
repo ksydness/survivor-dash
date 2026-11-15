@@ -266,14 +266,20 @@ export const CSS = `
 .dash .titles .cups{display:flex;gap:4px;color:var(--gold)}
 .dash .titles .cups .none{font-size:12px;color:var(--muted)}
 .dash .titles .d{font-size:12px;color:var(--muted)}
-.dash .season{margin-bottom:14px}
-.dash .season:last-child{margin-bottom:0}
-.dash .season>b{display:block;font-size:12px;font-weight:800;color:var(--soft);margin-bottom:4px}
-.dash .season div{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
-.dash .season div .pl{width:18px;font-weight:800;color:var(--muted)}
-.dash .season div .pl.w{color:var(--gold)}
-.dash .season div .t{flex:1;font-weight:600}
-.dash .season div .p{font-weight:800}
+.dash .slist{display:flex;flex-direction:column;gap:8px}
+.dash .srow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:64px;padding:10px 14px 10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none}
+.dash a.srow:hover{border-color:var(--disabled)}
+.dash .srow .sn{display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.dash .srow .sn span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.dash .srow .sn b{font-size:19px;font-weight:800}
+.dash .srow .pc{display:flex;flex-direction:column;gap:3px;min-width:0}
+.dash .srow .tn{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;min-width:0}
+.dash .srow .tn svg{flex:none;color:var(--gold)}
+.dash .srow .tn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash .srow .meta{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.dash .srow .chev{display:flex;color:var(--muted)}
+.dash .morelink{display:flex;align-items:center;justify-content:space-between;min-height:56px;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;color:inherit;text-decoration:none;font-size:15px;font-weight:800}
+.dash .morelink span{font-size:13px;font-weight:600;color:var(--muted)}
 .dash .strip{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;align-items:center;margin-bottom:14px}
 .dash .strip>span{font-size:12px;font-weight:700;color:var(--soft)}
 .dash .strip .line{position:relative;height:20px;border-bottom:1px solid var(--line)}

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import Dashboard from './dashboard';
 import DraftRoom from './DraftRoom';
 import { getSeasons } from '@/lib/data';
@@ -26,8 +27,10 @@ export async function generateMetadata(ctx: { params: Promise<{ season: string }
 
 // Server component — reads the season's status from the registry and renders
 // either the live draft room (status = "drafting") or the normal dashboard.
-export default async function SeasonPage(ctx: { params: Promise<{ season: string }> }) {
+export default async function SeasonPage(ctx: { params: Promise<{ season: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { season } = await ctx.params;
+  // History used to be a tab in every season; it's its own page now — keep old links working
+  if ((await ctx.searchParams).tab === 'history') redirect('/history');
   const n = parseInt(season, 10);
 
   let status = 'active';

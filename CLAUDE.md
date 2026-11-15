@@ -49,7 +49,7 @@ lib/data.ts   ── getSeasons() / getSeasonPayload(season) — assemble payloa
         ▼
 app/api/season/[season]  ── returns a season's full payload (?sync=1 bypasses cache)
         ▼
-app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Players / Draft / Stats / History (the tab row fades at the right edge while more tabs are off-screen)
+app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Players / Draft / Stats (the tab row fades at the right edge while more tabs are off-screen)
 ```
 
 ## Season lifecycle — 100% in Google Sheets
@@ -417,7 +417,7 @@ ahead of the scores at the latest week (that player still counts as in).
 | Variable | Description |
 |---|---|
 | `SEASONS_CSV_URL` | Published-CSV URL of the **Seasons** control tab (required) |
-| `HISTORY_CSV_URL` | Published-CSV URL of the **History** tab (optional; powers the all-time page) |
+| `HISTORY_CSV_URL` | Published-CSV URL of the **History** tab (optional; powers `/history` and the homepage's titles) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key of the shared **bakeoff-drafts** Supabase project (live draft writes) |
 | `COMMISSIONER_KEY` | Secret string that unlocks commissioner controls via `/s/<n>?key=…` (also authorizes the sheet's score-notification calls) |
 | `VAPID_PRIVATE_KEY` | Web Push private key (public half is in `lib/pushConfig.ts`); 🔔 button hidden while unset |
@@ -498,7 +498,7 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
    `survivor-notify-card-dismissed`). The bell in the top bar (`app/AppBar.tsx`, `variant="icon"`)
    is always there to turn them on/off; toggles on one page stay in sync via a `survivor-push-state`
    window event.
-5. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
+5. **All-time titles** (History tab of the sheet, via `historyModel`) with a link to `/history`.
 6. **Past seasons** — each with its champion and winning margin from the History tab.
 
 ## Dashboard tabs
@@ -529,8 +529,14 @@ declared once as CSS variables on `:root` in `app/globals.css` and used by every
    bust = biggest gap between draft slot and points finish).
 5. **Stats** (`dash/Stats.tsx`) — 4 headline tiles; Dig deeper: every-week-every-player heatmap,
    league points per week by team, more records.
-6. **History** (`dash/History.tsx`) — reigning champs + titles; Dig deeper: finish by season,
-   season-by-season results, points per season, all-time records.
+
+**History is its own page, `/history`** (2026-11-15; it was a tab inside every season, under a week bar that
+never applied to it): `app/history/page.tsx` (server: `getHistory()` + the registry) renders
+`app/history/HistoryView.tsx` inside `.dash` with the dashboard stylesheet — reigning champs + titles, "Every
+season" (champion + margin; a row opens `/s/<n>` when that season is registered and not drafting), then Dig
+deeper: finish by season, points per season, all-time records. Reached from the homepage's "Full history ›"
+and the "All-time history" link at the bottom of Stats. `/s/<n>?tab=history` redirects there
+(`app/s/[season]/page.tsx`).
 
 `PushToggle.tsx` takes `variant="icon"` (bell in the app bar; hint text bubbles up via `onHint`) and
 `variant="card"` (the homepage's notify card).
