@@ -8,8 +8,8 @@ import { shortName } from '@/lib/teamNames';
 
 type SortKey = 'total' | 'best' | 'name';
 
-/** Contestants: a compact list (still in first, out folded away); tap a name for their card. */
-export default function Contestants({ d }: { d: SeasonPayload }) {
+/** The Teams tab's "By player" view: everyone in one compact list (still in first, out folded away); tap a name for their card. */
+export default function Players({ d }: { d: SeasonPayload }) {
   const [sort, setSort] = useState<SortKey>('total');
   const [team, setTeam] = useState<string>('all');
   const [openName, setOpenName] = useState<string | null>(null);
@@ -46,11 +46,6 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
 
   return (
     <>
-      <div className="seg" role="group" aria-label="Sort by">
-        {([['total', 'Total'], ['best', 'Best week'], ['name', 'Name']] as [SortKey, string][]).map(([k, l]) => (
-          <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)}>{l}</button>
-        ))}
-      </div>
       <div className="chips" role="group" aria-label="Filter by team">
         <button type="button" className="chip" aria-pressed={team === 'all'} onClick={() => setTeam('all')}>All teams</button>
         {d.teamTotals.map((t, i) => (
@@ -60,7 +55,13 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
 
       <div className="phrow" style={{ margin: '4px 0 -6px' }}>
         <h2 className="ph">Still in · {alive.length}</h2>
-        <span className="aside">Tap a name for details</span>
+        <label className="sortsel">Sort
+          <select value={sort} onChange={e => setSort(e.target.value as SortKey)}>
+            <option value="total">Total</option>
+            <option value="best">Best week</option>
+            <option value="name">Name</option>
+          </select>
+        </label>
       </div>
       {alive.length === 0 ? <div className="empty">Nobody still in{team === 'all' ? '' : ' on this team'}.</div>
         : <div className="clist">{alive.map(r => row(r.c, false))}</div>}

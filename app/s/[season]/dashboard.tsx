@@ -16,14 +16,13 @@ import RevealSplash, { SHIELD_CSS } from '../../RevealSplash';
 import { unlockRevealSound } from '@/lib/revealSound';
 import Leaderboard from './dash/Leaderboard';
 import Teams from './dash/Teams';
-import Contestants from './dash/Contestants';
 import Draft from './dash/Draft';
 import Stats from './dash/Stats';
 
-type Tab = 'leaderboard' | 'teams' | 'contestants' | 'draft' | 'stats';
+type Tab = 'leaderboard' | 'teams' | 'draft' | 'stats';
+type TeamsView = 'team' | 'player';
 const TABS: [Tab, string][] = [
-  ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Players'],
-  ['draft', 'Draft'], ['stats', 'Stats'],
+  ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['draft', 'Draft'], ['stats', 'Stats'],
 ];
 const isTab = (v: string | null): v is Tab => !!v && TABS.some(([id]) => id === v);
 
@@ -42,6 +41,7 @@ export default function Dashboard({ season }: { season: number }) {
   const [data, setData] = useState<SeasonPayload | null>(null);
   const [tab, setTabState] = useState<Tab>('leaderboard');
   const [focusTeam, setFocusTeam] = useState<string | null>(null);
+  const [teamsView, setTeamsView] = useState<TeamsView>('team');  // Teams tab: rosters by team, or every player ranked
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState<number | null>(null);  // position in scored_weeks; null = latest
@@ -89,10 +89,13 @@ export default function Dashboard({ season }: { season: number }) {
     if (sync) { url.searchParams.delete('sync'); window.history.replaceState(null, '', url); }
     const t = url.searchParams.get('tab');
     if (isTab(t)) setTabState(t);
+    // Players used to be its own tab (?tab=contestants) — it's the Teams tab's "By player" view now
+    if (t === 'contestants') { setTabState('teams'); setTeamsView('player'); url.searchParams.set('tab', 'teams'); url.searchParams.set('view', 'player'); window.history.replaceState(null, '', url); }
+    else if (t === 'teams' && url.searchParams.get('view') === 'player') setTeamsView('player');
     // ?tab=teams&team=X (homepage standings rows) opens that team's breakdown; drop the param once read
     const team = url.searchParams.get('team');
     if (team) {
-      if (t === 'teams') setFocusTeam(team);
+      if (t === 'teams') { setFocusTeam(team); setTeamsView('team'); }
       url.searchParams.delete('team'); window.history.replaceState(null, '', url);
     }
     load(sync);
@@ -120,7 +123,14 @@ export default function Dashboard({ season }: { season: number }) {
     setTabState(t);
     setFocusTeam(team);
     setParam('tab', t === 'leaderboard' ? null : t);
+    if (team) setTeamsView('team');
+    setParam('view', t === 'teams' && !team && teamsView === 'player' ? 'player' : null);
     window.scrollTo({ top: 0 });
+  }
+  function pickTeamsView(vw: TeamsView) {
+    setTeamsView(vw);
+    setFocusTeam(null);
+    setParam('view', vw === 'player' ? 'player' : null);
   }
   function goTo(k: number | null) {
     setView(k);
@@ -218,8 +228,7 @@ export default function Dashboard({ season }: { season: number }) {
 
         <main>
           {cur === 'leaderboard' && <Leaderboard d={v} goTeams={team => setTab('teams', team)} onReplay={sw.length ? () => openReplay(k) : undefined} />}
-          {cur === 'teams' && <Teams d={v} focusTeam={focusTeam} />}
-          {cur === 'contestants' && <Contestants d={v} />}
+          {cur === 'teams' && <Teams d={v} focusTeam={focusTeam} view={teamsView} onView={pickTeamsView} />}
           {cur === 'draft' && data.draft && <Draft d={v} />}
           {cur === 'stats' && <Stats d={v} />}
         </main>

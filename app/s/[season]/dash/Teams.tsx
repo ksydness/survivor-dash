@@ -5,12 +5,16 @@ import type { SeasonPayload } from '@/lib/types';
 import { Dot, IconSearch, PlayerCard, WeekBars } from './bits';
 import { colorFor, ordinal, rosterOf, teamSeries } from './model';
 import { shortName } from '@/lib/teamNames';
+import Players from './Players';
 
 /**
- * Teams: at a glance → players left per team and every roster as name chips.
- * One tap deeper → a player's card. Another → the team breakdown (where the points came from, by week).
+ * Teams: at a glance → players still in per team, then a switch between two views of the same people.
+ * By team: every roster as name chips; one tap deeper → a player's card, another → the team breakdown
+ * (where the points came from, by week). By player: everyone ranked (dash/Players.tsx).
  */
-export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: string | null }) {
+export default function Teams({ d, focusTeam, view, onView }: {
+  d: SeasonPayload; focusTeam: string | null; view: 'team' | 'player'; onView: (v: 'team' | 'player') => void;
+}) {
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>(focusTeam ? { [focusTeam]: true } : {});
@@ -43,6 +47,12 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
       </section>
       <p className="note" style={{ textAlign: 'center', margin: '-6px 0 0' }}>{aliveTotal} of {d.contestants.length} players still in · tap a name for their card</p>
 
+      <div className="seg" role="group" aria-label="View">
+        <button type="button" aria-pressed={view === 'team'} onClick={() => onView('team')}>By team</button>
+        <button type="button" aria-pressed={view === 'player'} onClick={() => onView('player')}>By player</button>
+      </div>
+
+      {view === 'player' ? <Players d={d} /> : <>
       <div className="search">
         <label htmlFor="find-player" className="ph">Find a player</label>
         <div className="box">
@@ -121,6 +131,7 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
           </section>
         );
       })}
+      </>}
     </>
   );
 }
