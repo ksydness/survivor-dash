@@ -36,7 +36,7 @@ export const CSS = `
 .dash .tabsbar{position:sticky;top:0;z-index:20;background:var(--bg);margin:12px -16px 0;padding:6px 0}
 .dash .tabs{display:flex;gap:6px;overflow-x:auto;padding:0 16px;scrollbar-width:none}
 .dash .tabs::-webkit-scrollbar{display:none}
-.dash .tab{flex:none;height:40px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--soft);font-size:14px;font-weight:700;cursor:pointer}
+.dash .tab{flex:1 0 auto;height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--soft);font-size:14px;font-weight:700;cursor:pointer}
 .dash .tab[aria-current="page"]{background:var(--grad);color:var(--panel);border-color:transparent}
 .dash main{display:flex;flex-direction:column;gap:16px;margin-top:12px}
 
@@ -45,6 +45,8 @@ export const CSS = `
 .dash .ph{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .dash .phrow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
 .dash .phrow .aside{font-size:12px;color:var(--muted)}
+.dash .sortsel{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:600}
+.dash .sortsel select{height:32px;padding:0 8px;border-radius:999px;border:1px solid var(--line2);background:var(--panel);color:var(--text);font:inherit;font-size:13px;font-weight:700}
 .dash .sub{margin:4px 0 12px;font-size:13px;color:var(--muted)}
 .dash .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.45}
 .dash .sectionlabel{margin:6px 0 -4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}

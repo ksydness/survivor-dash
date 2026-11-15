@@ -49,7 +49,7 @@ lib/data.ts   ── getSeasons() / getSeasonPayload(season) — assemble payloa
         ▼
 app/api/season/[season]  ── returns a season's full payload (?sync=1 bypasses cache)
         ▼
-app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Players / Draft / Stats (the tab row fades at the right edge while more tabs are off-screen)
+app/s/[season]/dashboard.tsx ── renders Leaderboard / Teams / Draft / Stats (four tabs that fill the row; the row still scrolls with a fade on a very narrow screen)
 ```
 
 ## Season lifecycle — 100% in Google Sheets
@@ -504,7 +504,7 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
 ## Dashboard tabs
 
 `app/s/[season]/dashboard.tsx` is the shell (the shared app bar, full-width week picker, one swipeable
-row of tabs, `?tab=` and `?week=` kept in the URL). Each tab lives in `app/s/[season]/dash/`.
+row of tabs, `?tab=`, `?view=` and `?week=` kept in the URL). Each tab lives in `app/s/[season]/dash/`.
 Design rule on every tab: **the answer people come for sits up top; deeper data is one tap away**
 (player cards, team breakdowns, "Dig deeper" sections that start closed). Design references: the
 "Survivor Dash — UX Mockups" canvas and the "Fantasy Survivor" design system (colors = its tokens,
@@ -519,16 +519,17 @@ declared once as CSS variables on `:root` in `app/globals.css` and used by every
 1. **Leaderboard** (`dash/Leaderboard.tsx`) — week recap card, standings (▲/▼ movement, points
    back, bar vs leader, players-left pips); tap a team → its players with season + this-week points
    and a link to the Teams tab. Rank chart fits the screen. "Week by week" highlights in a disclosure.
-2. **Teams** (`dash/Teams.tsx`, `?team=<name>` opens that team's breakdown) — players left per team, Find a player, every roster as name chips
-   (out = dashed + crossed out); tap a name → player card; "Team breakdown" → where the points came
-   from + team points by week.
-3. **Players** (`dash/Contestants.tsx`, still `?tab=contestants`; renamed on screen 2026-10-23) — compact list (sort Total / Best week / Name, team
-   filter), still in first, out folded away; tap a row → player card.
-4. **Draft** (`dash/Draft.tsx`, only when the Draft tab is published) — the whole board on one
+2. **Teams** (`dash/Teams.tsx`; `?team=<name>` opens that team's breakdown) — players still in per team, then a
+   **By team / By player** switch (2026-11-15: Teams and Players were two tabs showing the same people).
+   *By team*: Find a player, every roster as name chips (out = dashed + crossed out); tap a name → player card;
+   "Team breakdown" → where the points came from + team points by week. *By player* (`dash/Players.tsx`,
+   `?tab=teams&view=player`): compact list, team filter, Sort (Total / Best week / Name), still in first, out
+   folded away; tap a row → player card. The old `?tab=contestants` opens this view.
+3. **Draft** (`dash/Draft.tsx`, only when the Draft tab is published) — the whole board on one
    screen (rounds down, teams across, snake arrows), then steals & busts (pick # vs points; steal /
    bust = biggest gap between draft slot and points finish).
-5. **Stats** (`dash/Stats.tsx`) — 4 headline tiles; Dig deeper: every-week-every-player heatmap,
-   league points per week by team, more records.
+4. **Stats** (`dash/Stats.tsx`) — 4 headline tiles; Dig deeper: every-week-every-player heatmap,
+   league points per week by team, more records; then the link to `/history`.
 
 **History is its own page, `/history`** (2026-11-15; it was a tab inside every season, under a week bar that
 never applied to it): `app/history/page.tsx` (server: `getHistory()` + the registry) renders
