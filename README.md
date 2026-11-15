@@ -1,54 +1,53 @@
 # 🔥 survivor-dash
 
-A shareable web hub for a friends-league **Fantasy Survivor** game. Your Google Sheet stays the
-source of truth (you keep tallying in the **Input** tab); this app reads the computed results and
-displays them as a clean, mobile-friendly, auto-updating dashboard with a link you can send anyone.
+The web home for a friends-league **Fantasy Survivor** game: a live dashboard for every season, a
+multi-device draft room, the Survivor night scheduler, and a spoiler-safe score reveal.
 
-> Built to mirror the `geosports-dash` project — same stack and patterns. See **CLAUDE.md** for the
-> full context (game rules, scoring, data flow, architecture) so any future change needs no
-> re-explaining.
+Live at https://survivor-dash.vercel.app (public link, hidden from search engines).
 
-**Sheet-only**: no database. The app reads your published Google Sheet tabs directly, driven by a
-**Seasons** control tab. Everything a commissioner does happens in the sheet.
+The Google Sheet stays the source of truth and the scoring engine. Kenny tallies each episode in
+the **Input** tab and runs **Survivor Tools → Update Scores**; this app only reads the computed
+results. Everything the commissioner does happens in the sheet.
+
+**Read `CLAUDE.md` before changing anything** — it has the architecture, sheet schema and gotchas.
 
 ## What's here
 
 ```
-prototype/index.html   ← OPEN THIS — working dashboard preview w/ real Season 50 data
-CLAUDE.md              ← project context / spec (read before changing anything)
-app/                   ← Next.js App Router (landing, season dashboard, API routes)
-lib/                   ← data.ts (sheet reader/assembler), sheets.ts (CSV parsers), scoring.ts, types.ts
-future-db/             ← parked Supabase path for the eventual "drop the sheet" migration
+app/page.tsx          homepage: current season, next Survivor night, titles, past seasons
+app/s/[season]/       season dashboard (dashboard.tsx + dash/*) or the live draft room (DraftRoom.tsx)
+app/viewing/          Survivor night scheduler (polls, votes, set night, calendar)
+app/scoring/          scoring rules, read from the sheet's Scoring tab
+app/AppBar.tsx        the top bar every page shares
+app/globals.css       color tokens (declared once) + the top bar's styles
+app/RevealSplash.tsx  the score reveal
+app/api/              season data, live draft, Survivor night, push notifications
+lib/data.ts           the only data access layer (sheet CSVs → payload, cached ~3 min)
+lib/sheets.ts         CSV parsers (tolerant on purpose — older seasons differ)
+lib/viewing*.ts       Survivor night rules, store, pushes
+apps-script/          SurvivorTools.complete.gs — the script pasted into the hub workbook
+future-db/            parked database path for an eventual move off the sheet (not used)
 ```
 
-## Tabs
+Data: scoring comes only from the published Google Sheet tabs listed in the hub's **Seasons** tab.
+A small Supabase project holds live-draft state, Survivor nights and push subscriptions — never scores.
 
-Leaderboard (standings + rank-through-season chart + weekly highlights) · Teams (rosters) ·
-Contestants (sortable, weekly trend) · Stats (records) · History (seasons 46–50).
-
-## Quick start (local)
+## Local
 
 ```bash
 npm install
-cp .env.local.example .env.local   # set SEASONS_CSV_URL (+ optional HISTORY_CSV_URL)
-npm run dev
+SEASONS_CSV_URL=<published Seasons tab CSV> npm run dev
+npx tsc --noEmit      # typecheck before pushing
+npm test              # Vitest
 ```
 
-## Go live (one-time)
+Survivor night changes: also run `scripts/e2e-viewing.py` (setup in its docstring).
 
-1. Create a **GitHub repo** + **Vercel project** (no database).
-2. Add a **Seasons** tab to your sheet: `Season | Name | Status | Episodes URL | Contestants URL | Leaderboard URL | Scoring URL | Weeks`. (Optional **History** tab: `Season | Place | Team | Points`.)
-3. **File → Share → Publish to web** → publish the Seasons tab, the History tab, and each season's
-   Episodes / Contestants / Leaderboard / Scoring tabs as **CSV**. Paste the per-season URLs into the
-   Seasons tab row (Status = `active`).
-4. Set `SEASONS_CSV_URL` (and `HISTORY_CSV_URL`) in Vercel.
-5. Push to `main` → Vercel deploys. Visit `/s/50`.
+## Each season (all in the sheet)
 
-## Running it each season (all in the sheet)
-
-- **New season** → copy last season's sheet, draft, fill Contestants, publish tabs, add a Seasons row.
-- **End a season** → set that row's Status to `final`.
-- **Change scoring** → edit the Scoring tab, re-run *Update Scores*.
-
-After your weekly tally + *Update Scores*, the dashboard reflects it on the next refresh (or instantly
-via the Refresh button).
+- **New season** → copy last season's workbook, publish it, **Survivor Tools → Start New Season**,
+  set Status to `drafting`, run the draft, paste the exports, set Status to `active`.
+- **Each episode** → tally in Input, **Update Scores**; type the week in the Contestants tab's `Out`
+  column when someone goes home.
+- **End a season** → **Survivor Tools → Finalize Season**.
+- **Change scoring** → edit the Scoring tab and re-run Update Scores. No app change.

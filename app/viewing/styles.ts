@@ -1,19 +1,11 @@
 // Viewing-night page stylesheet, scoped under .vw (same approach as the homepage's _home/styles.ts).
-// Colors are the Fantasy Survivor design-system tokens.
+// Colors are the shared tokens in app/globals.css.
 export const VW_CSS = `
-.vw{--bg:#0c0a09;--panel:#1c1917;--sunk:#1f1b19;--panel2:#262220;--line:#2f2a27;--line2:#3a342f;--text:#fafaf9;--soft:#d6d3d1;--muted:#a8a29e;--faint:#78716c;--dim:#57534e;
-  --accent:#f59e0b;--accent2:#f97316;--gold:#fcd34d;--neg:#f87171;--pos:#4ade80;
-  max-width:560px;margin:0 auto;padding-bottom:48px;color:var(--text)}
+.vw{max-width:560px;margin:0 auto;padding-bottom:48px;color:var(--text)}
 .vw a{color:inherit;text-decoration:none}
 .vw button{font:inherit;color:inherit;cursor:pointer}
 .vw button:disabled{opacity:.55;cursor:default}
 .vw .num{font-variant-numeric:tabular-nums}
-.vw .bar{display:flex;align-items:center;gap:4px;height:56px;padding:0 6px 0 4px;border-bottom:1px solid var(--line)}
-.vw .bar h1{flex:1;margin:0;font-size:17px;font-weight:800;letter-spacing:-.01em}
-.vw .iconbtn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:999px;color:var(--soft);background:none;border:0}
-.vw .iconbtn:hover{background:var(--panel)}
-.vw .iconbtn.on{color:var(--accent)}
-.vw .hint{margin:8px auto 0;max-width:420px;font-size:12px;color:var(--muted);line-height:1.45;text-align:center;padding:0 16px}
 .vw main{padding:16px 16px 0;display:flex;flex-direction:column;gap:14px}
 .vw .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px}
 .vw .card.hi{border-color:var(--line2)}

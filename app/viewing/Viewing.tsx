@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePullRefresh } from '../PullToRefresh';
-import PushToggle from '../s/[season]/PushToggle';
+import AppBar from '../AppBar';
 import { colorFor } from '../s/[season]/dash/model';
 import {
   type Answer, type Roster, type Viewing as V, type ViewingOption, type ViewingState, type Vote,
@@ -106,7 +106,6 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
   const [keyBox, setKeyBox] = useState(false);   // hidden commissioner-key field (5 quick taps on the title)
   const taps = useRef<number[]>([]);
   const router = useRouter();
@@ -217,14 +216,8 @@ export default function Viewing({ initial, go }: { initial: ViewingState; go?: s
 
   return (
     <>
-      <header className="bar">
-        {back
-          ? <button type="button" className="iconbtn" aria-label="Back" onClick={back}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></button>
-          : <Link className="iconbtn" href="/" aria-label="Home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg></Link>}
-        <h1 onClick={tapTitle} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>{screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Survivor night'}</h1>
-        <PushToggle variant="icon" onHint={setHint} />
-      </header>
-      {hint && <p className="hint" role="status">{hint}</p>}
+      <AppBar title={screen === 'who' ? 'Who’s voting?' : screen === 'start' ? 'Start a poll' : screen === 'reopen' ? 'Add more nights' : screen === 'add' ? 'Add the date' : 'Survivor night'} onTitleClick={tapTitle}
+        back={back ? { label: 'Back', onClick: back } : { label: 'Home', href: '/' }} />
 
       <main>
         {err && <div className="err" role="alert">{err}</div>}

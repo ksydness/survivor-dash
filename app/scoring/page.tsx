@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import AppBar from '../AppBar';
 import { getScoringRules } from '@/lib/data';
 
 export const dynamic = 'force-dynamic';
 
-const BRAND = { emoji: '🔥', league: 'Fantasy Survivor', grad: 'linear-gradient(90deg,#f59e0b,#f97316)' };
+const BRAND = { league: 'Fantasy Survivor' };
 
 export const metadata: Metadata = {
   title: `Scoring rules · ${BRAND.league}`,
@@ -20,16 +20,10 @@ export default async function ScoringPage() {
   catch (e: any) { err = e?.message ?? 'Could not load the scoring rules.'; }
 
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '14px 16px 64px' }}>
-      <Link href="/" style={{ color: '#a8a29e', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>‹ All seasons</Link>
-      <div style={{ textAlign: 'center', padding: '28px 0 22px' }}>
-        <div style={{ fontSize: 40 }}>{BRAND.emoji}</div>
-        <h1 style={{ fontSize: 28, fontWeight: 800, marginTop: 6, background: BRAND.grad,
-          WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-          Scoring rules
-        </h1>
-        {data && <p style={{ color: '#a8a29e', fontSize: 14, marginTop: 4 }}>As used in {data.name}</p>}
-      </div>
+    <div style={{ maxWidth: 640, margin: '0 auto' }}>
+    <AppBar title="Scoring rules" back={{ label: 'All seasons', href: '/' }} bell={false} />
+    <main style={{ padding: '14px 16px 64px' }}>
+      {data && <p style={{ color: '#a8a29e', fontSize: 14, margin: '2px 2px 12px' }}>As used in {data.name}</p>}
 
       {err && <p style={{ color: '#f87171', fontSize: 13, textAlign: 'center' }}>{err}</p>}
       {!err && !data && <p style={{ color: '#78716c', textAlign: 'center' }}>No Scoring tab found yet.</p>}
@@ -61,5 +55,6 @@ export default async function ScoringPage() {
         Points per occurrence, tallied each episode.
       </p>
     </main>
+    </div>
   );
 }

@@ -1,7 +1,29 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Fantasy Survivor design-system tokens — declared once, used by every page's stylesheet. */
+:root {
+  --bg: #0c0a09; --panel: #1c1917; --sunk: #1f1b19; --panel2: #262220; --line: #2f2a27; --line2: #3a342f;
+  --text: #fafaf9; --soft: #d6d3d1; --muted: #a8a29e; --faint: #78716c; --dim: #57534e; --disabled: #44403c;
+  --accent: #f59e0b; --accent2: #f97316; --gold: #fcd34d; --neg: #f87171; --pos: #4ade80;
+  --grad: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+
 body {
-  background: #0c0a09;
-  color: #fafaf9;
+  background: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* The shared top bar (app/AppBar.tsx). */
+.appbar { display: flex; align-items: center; gap: 2px; height: 56px; padding: 0 6px; border-bottom: 1px solid var(--line); margin: 0 auto; color: var(--text); }
+.appbar.noback { padding-left: 16px; }
+.appbar .ttl { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.appbar .ttl h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar .ttl.brand h1 { font-size: 19px; letter-spacing: -.02em; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.appbar .torch { font-size: 20px; line-height: 1; }
+.appbar .iconbtn { width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 999px; background: none; border: 0; color: var(--soft); cursor: pointer; text-decoration: none; font: inherit; }
+.appbar .iconbtn:hover { background: var(--panel); }
+.appbar .iconbtn:disabled { opacity: .5; cursor: default; }
+.appbar .iconbtn.on { color: var(--accent); }
+.appbar-hint { margin: 8px auto 0; max-width: 420px; font-size: 12px; color: var(--muted); line-height: 1.45; text-align: center; padding: 0 16px; }
