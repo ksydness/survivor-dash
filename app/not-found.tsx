@@ -14,7 +14,7 @@ export default function NotFound() {
       </p>
       <Link href="/" style={{ display: 'inline-block', marginTop: 24, background: '#262220', color: '#fafaf9', border: '1px solid #3a342f',
         borderRadius: 10, padding: '10px 18px', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
-        ‹ All seasons
+        ‹ Home
       </Link>
     </main>
   );

@@ -37,7 +37,7 @@ export function Disclosure({ title, sub, defaultOpen = false, children }: { titl
 /** Players-left pips: filled = still in, hollow = out. */
 export function Pips({ left, size, color }: { left: number; size: number; color: string }) {
   return (
-    <span className="pips" role="img" aria-label={`${left} of ${size} players left`}>
+    <span className="pips" role="img" aria-label={`${left} of ${size} players still in`}>
       {Array.from({ length: size }, (_, i) => (
         <span key={i} className="pip" style={i < left ? { background: color, borderColor: color } : { borderColor: '#57534e' }} />
       ))}

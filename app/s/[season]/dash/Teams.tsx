@@ -33,7 +33,7 @@ export default function Teams({ d, focusTeam }: { d: SeasonPayload; focusTeam: s
 
   return (
     <>
-      <section aria-label="Players left per team" className="glance" style={{ ['--n' as string]: Math.min(teams.length, 4) }}>
+      <section aria-label="Players still in per team" className="glance" style={{ ['--n' as string]: Math.min(teams.length, 4) }}>
         {teams.map(t => (
           <div key={t.team} className="gl" style={{ borderTopColor: t.color }}>
             <b className="num">{t.left}<small>/{t.roster.length}</small></b>

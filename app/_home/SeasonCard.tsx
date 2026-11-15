@@ -111,7 +111,7 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
         {f.rows.map(t => {
           const mv = t.move === null ? null : t.move > 0 ? { c: 'up', txt: `▲${t.move}`, sr: `up ${t.move}` } : t.move < 0 ? { c: 'down', txt: `▼${-t.move}`, sr: `down ${-t.move}` } : { c: '', txt: '–', sr: 'no change' };
           const rankTxt = t.tied ? `T-${t.rank}` : String(t.rank);
-          const label = `${t.team}, ${t.tied ? `tied for ${t.rank === 1 ? '1st' : `rank ${t.rank}`}` : `rank ${t.rank}`}, ${t.total} points${t.week !== null ? `, ${fmtDelta(t.week)} this week` : ''}, ${t.left} of ${t.size} players left${mv ? `, ${mv.sr} since last week` : ''}. Open in Teams`;
+          const label = `${t.team}, ${t.tied ? `tied for ${t.rank === 1 ? '1st' : `rank ${t.rank}`}` : `rank ${t.rank}`}, ${t.total} points${t.week !== null ? `, ${fmtDelta(t.week)} this week` : ''}, ${t.left} of ${t.size} players still in${mv ? `, ${mv.sr} since last week` : ''}. Open in Teams`;
           return (
             <Link key={t.team}
               className="row" href={`${href}?tab=teams&team=${encodeURIComponent(t.team)}`} aria-label={label}>
@@ -123,12 +123,12 @@ export default function SeasonCard({ season, name, active, frames, reveals, hadC
                 <span className="tn"><span className="dot" style={{ background: t.color }} /><span>{shortName(t.team)}{!active && t.rank === 1 ? ' 👑' : ''}</span></span>
                 <span className="sub">
                   <span className="pips">{Array.from({ length: t.size }, (_, n) => <span key={n} className="pip" style={n < t.left ? { background: t.color, borderColor: t.color } : undefined} />)}</span>
-                  {t.left} of {t.size} left
+                  {t.left} of {t.size} still in
                 </span>
               </span>
               <span className="pts" aria-hidden>
                 <b className="num"><CountUp value={t.total} /></b>
-                {t.week !== null ? <span className={`num ${t.week < 0 ? 'neg' : ''}`}>{fmtDelta(t.week)} this wk</span>
+                {t.week !== null ? <span className={`num ${t.week < 0 ? 'neg' : ''}`}>{fmtDelta(t.week)} this week</span>
                   : t.rank === 1 && !t.tied ? <span>{active ? 'Leader' : 'Champion'}</span>
                     : <span className="num">{t.back} back</span>}
               </span>

@@ -36,7 +36,7 @@ export default function Stats({ d }: { d: SeasonPayload }) {
             : `${leader.total} pts${second ? ` · ${r2(leader.total - second.total)} ahead` : ''}`}</div>
         </div>
         <div className="tile">
-          <div className="k">Top contestant</div>
+          <div className="k">Top player</div>
           <div className="v">{top[0]?.name ?? '—'}</div>
           <div className="d">{top[0] ? `${top[0].total} pts · ${shortName(top[0].team)}` : ''}</div>
         </div>
@@ -46,7 +46,7 @@ export default function Stats({ d }: { d: SeasonPayload }) {
           <div className="d">{sw.length ? `${bestWk.p} · Week ${bestWk.wk}` : 'No weeks scored yet'}</div>
         </div>
         <div className="tile">
-          <div className="k">Players left</div>
+          <div className="k">Still in</div>
           <div className="v num">{alive.length} <small>of {d.contestants.length}</small></div>
           <div className="d">{alive.length > 0 && alive.length <= 6 ? alive.map(c => c.name).join(', ') : `${d.contestants.length - alive.length} out so far`}</div>
         </div>
