@@ -62,7 +62,7 @@ export default function Contestants({ d }: { d: SeasonPayload }) {
         <h2 className="ph">Still in · {alive.length}</h2>
         <span className="aside">Tap a name for details</span>
       </div>
-      {alive.length === 0 ? <div className="empty">Nobody left{team === 'all' ? '' : ' on this team'}.</div>
+      {alive.length === 0 ? <div className="empty">Nobody still in{team === 'all' ? '' : ' on this team'}.</div>
         : <div className="clist">{alive.map(r => row(r.c, false))}</div>}
 
       {out.length > 0 && (

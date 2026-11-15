@@ -21,7 +21,7 @@ export default async function ScoringPage() {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
-    <AppBar title="Scoring rules" back={{ label: 'All seasons', href: '/' }} bell={false} />
+    <AppBar title="Scoring rules" back={{ label: 'Home', href: '/' }} bell={false} />
     <main style={{ padding: '14px 16px 64px' }}>
       {data && <p style={{ color: '#a8a29e', fontSize: 14, margin: '2px 2px 12px' }}>As used in {data.name}</p>}
 

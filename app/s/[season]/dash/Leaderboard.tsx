@@ -73,7 +73,7 @@ export default function Leaderboard({ d, goTeams, onReplay }: {
                     <span className="tn"><Dot c={t.color} /><span>{shortName(t.team)}{champ ? ' 👑' : ''}</span></span>
                     <span className="track" aria-hidden><i style={{ width: `${rows[0].total > 0 ? Math.max(2, (t.total / rows[0].total) * 100) : 0}%`, background: t.color }} /></span>
                     <span className="meta">
-                      <span className={t.week !== null && t.week < 0 ? 'neg' : ''}>{t.week !== null ? `${fmtDelta(t.week)} this week` : `${t.left} of ${t.size} left`}</span>
+                      <span className={t.week !== null && t.week < 0 ? 'neg' : ''}>{t.week !== null ? `${fmtDelta(t.week)} this week` : `${t.left} of ${t.size} still in`}</span>
                       <Pips left={t.left} size={t.size} color={t.color} />
                     </span>
                   </span>

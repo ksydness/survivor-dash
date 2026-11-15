@@ -131,7 +131,7 @@ export default function Dashboard({ season }: { season: number }) {
 
   const title = data?.meta?.name || `Season ${season}`;
   const appBar = (
-    <AppBar title={title} brand back={{ label: 'All seasons', href: '/', reload: true }}>
+    <AppBar title={title} brand back={{ label: 'Home', href: '/', reload: true }}>
       <RulesLink />
       <button type="button" className={`iconbtn ${refreshing ? 'spin' : ''}`} onClick={() => load(true)} disabled={refreshing || loading}
         aria-label={refreshing ? 'Syncing scores' : 'Refresh scores'} title="Refresh scores"><IconRefresh /></button>
