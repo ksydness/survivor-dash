@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { SeasonPayload } from '@/lib/types';
 import { Disclosure, Dot } from './bits';
 import { colorFor, r2, teamWeekPts, weekLabel } from './model';
@@ -71,6 +72,7 @@ export default function Stats({ d }: { d: SeasonPayload }) {
           </div>
         </Disclosure>
       </>}
+      <Link className="morelink" href="/history">All-time history<span>Champions and records ›</span></Link>
     </>
   );
 }

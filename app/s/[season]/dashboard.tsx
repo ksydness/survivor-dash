@@ -19,12 +19,11 @@ import Teams from './dash/Teams';
 import Contestants from './dash/Contestants';
 import Draft from './dash/Draft';
 import Stats from './dash/Stats';
-import History from './dash/History';
 
-type Tab = 'leaderboard' | 'teams' | 'contestants' | 'draft' | 'stats' | 'history';
+type Tab = 'leaderboard' | 'teams' | 'contestants' | 'draft' | 'stats';
 const TABS: [Tab, string][] = [
   ['leaderboard', 'Leaderboard'], ['teams', 'Teams'], ['contestants', 'Players'],
-  ['draft', 'Draft'], ['stats', 'Stats'], ['history', 'History'],
+  ['draft', 'Draft'], ['stats', 'Stats'],
 ];
 const isTab = (v: string | null): v is Tab => !!v && TABS.some(([id]) => id === v);
 
@@ -59,7 +58,7 @@ export default function Dashboard({ season }: { season: number }) {
     if (data?.meta?.status === 'active' && shield && readSeen(season) == null) writeSeen(season, shield.seen);
   }, [data, shield, season]);
 
-  // keep the active tab visible in the swipeable row (e.g. opening ?tab=history on a phone)
+  // keep the active tab visible in the swipeable row (e.g. opening ?tab=stats on a phone)
   useEffect(() => {
     const el = tabsRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
     const row = tabsRef.current;
@@ -223,7 +222,6 @@ export default function Dashboard({ season }: { season: number }) {
           {cur === 'contestants' && <Contestants d={v} />}
           {cur === 'draft' && data.draft && <Draft d={v} />}
           {cur === 'stats' && <Stats d={v} />}
-          {cur === 'history' && <History d={v} />}
         </main>
       </div>
       {splash && <RevealSplash steps={splash.steps} replay={splash.replay} onStep={splash.replay ? undefined : landed} onClose={closeReveal} />}

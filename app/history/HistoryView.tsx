@@ -1,12 +1,17 @@
 'use client';
 
+import Link from 'next/link';
 import type { SeasonPayload } from '@/lib/types';
-import { Disclosure, Dot, IconCup } from './bits';
-import { colorFor, historyModel, ordinal } from './model';
+import { Disclosure, Dot, IconCup, IconNext } from '../s/[season]/dash/bits';
+import { colorFor, historyModel, ordinal, r2 } from '../s/[season]/dash/model';
 
-/** History: reigning champs + titles up top; charts, results and records behind "Dig deeper". */
-export default function History({ d }: { d: SeasonPayload }) {
-  const h = historyModel(d);
+/**
+ * The all-time page (/history): reigning champs + titles up top, every finished season as a row that
+ * opens its dashboard, then charts and records behind "Dig deeper". `open` = seasons that have a
+ * dashboard to open (registered and not drafting); others show as a plain row.
+ */
+export default function HistoryView({ history, open }: { history: SeasonPayload['history']; open: number[] }) {
+  const h = historyModel({ history });
   if (!h.seasons.length) return <div className="empty">No past seasons yet. Add rows to the History tab in the sheet.</div>;
   const champColor = h.champ ? colorFor(h.champ.team) : '#f59e0b';
   return (
@@ -38,27 +43,30 @@ export default function History({ d }: { d: SeasonPayload }) {
         </div>
       </section>
 
+      <h2 className="sectionlabel">Every season</h2>
+      <div className="slist">
+        {h.seasons.map(sn => {
+          const rows = h.bySeason[sn];
+          const champ = rows.find(r => r.place === 1), second = rows.find(r => r.place === 2);
+          const inner = (<>
+            <span className="sn"><span>Season</span><b>{sn}</b></span>
+            <span className="pc">
+              <span className="tn"><IconCup size={15} /><span>{champ?.team ?? '—'}</span></span>
+              {champ && <span className="meta"><Dot c={colorFor(champ.team)} /><span className="num">{champ.points} pts{second ? ` · won by ${r2(champ.points - second.points)}` : ''}</span></span>}
+            </span>
+          </>);
+          return open.includes(sn)
+            ? <Link key={sn} href={`/s/${sn}`} className="srow" aria-label={`Season ${sn}${champ ? `: champion ${champ.team}, ${champ.points} points` : ''}. Open season`}>{inner}<span className="chev"><IconNext /></span></Link>
+            : <div key={sn} className="srow">{inner}</div>;
+        })}
+      </div>
+
       <h2 className="sectionlabel">Dig deeper</h2>
       {h.seasons.length > 1 && (
         <Disclosure title="Finish by season" sub={`Where every team placed, S${h.seasons[h.seasons.length - 1]}–S${h.seasons[0]}`}>
           <FinishChart h={h} />
         </Disclosure>
       )}
-      <Disclosure title="Season-by-season results" sub="Final standings for every season">
-        {h.seasons.map(s => (
-          <div key={s} className="season">
-            <b>Season {s}</b>
-            {h.bySeason[s].map(r => (
-              <div key={r.team}>
-                <span className={`pl ${r.place === 1 ? 'w' : ''}`}>{r.place}</span>
-                <Dot c={colorFor(r.team)} />
-                <span className="t">{r.team}</span>
-                <span className="p num">{r.points}</span>
-              </div>
-            ))}
-          </div>
-        ))}
-      </Disclosure>
       <Disclosure title="Points per season" sub="How close each title race was">
         <Strip h={h} />
       </Disclosure>
