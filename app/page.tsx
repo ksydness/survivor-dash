@@ -10,7 +10,7 @@ import SeasonCard, { type Frame } from './_home/SeasonCard';
 import PushToggle from './s/[season]/PushToggle';
 import DraftRefresh from './_home/DraftRefresh';
 import ResumeRefresh from './_home/ResumeRefresh';
-import HomeBar from './_home/HomeBar';
+import AppBar, { RulesLink } from './AppBar';
 import { HOME_CSS } from './_home/styles';
 import ViewingCard from './_home/ViewingCard';
 import { getViewingState, viewingConfigured } from '@/lib/viewing';
@@ -80,7 +80,7 @@ export default async function Home() {
   return (
     <div className="home">
       <style dangerouslySetInnerHTML={{ __html: HOME_CSS }} />
-      <HomeBar />
+      <AppBar title="Fantasy Survivor" brand><RulesLink /></AppBar>
       <ResumeRefresh />
 
       <main>

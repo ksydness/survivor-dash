@@ -6,10 +6,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SeasonPayload } from '@/lib/types';
-import PushToggle from './PushToggle';
+import AppBar, { RulesLink } from '../../AppBar';
 import { usePullRefresh } from '../../PullToRefresh';
 import { CSS } from './dash/styles';
-import { IconBack, IconNext, IconPrev, IconRefresh, IconRules } from './dash/bits';
+import { IconNext, IconPrev, IconRefresh } from './dash/bits';
 import { asOf, weekLabel } from './dash/model';
 import { readSeen, revealInfo, shieldFor, shielded, writeSeen, type RevealInfo } from './dash/spoiler';
 import RevealSplash, { SHIELD_CSS } from '../../RevealSplash';
@@ -46,7 +46,6 @@ export default function Dashboard({ season }: { season: number }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState<number | null>(null);  // position in scored_weeks; null = latest
-  const [hint, setHint] = useState<string | null>(null);
   const tabsRef = useRef<HTMLElement | null>(null);
   const [seenTick, setSeenTick] = useState(0);  // bumps after a reveal so the cookie is re-read
   const [splash, setSplash] = useState<{ steps: RevealInfo[]; replay: boolean } | null>(null);  // frozen when opened
@@ -132,14 +131,11 @@ export default function Dashboard({ season }: { season: number }) {
 
   const title = data?.meta?.name || `Season ${season}`;
   const appBar = (
-    <header className="appbar">
-      <a className="iconbtn" href="/" aria-label="All seasons"><IconBack /></a>
-      <div className="brand"><span className="torch" aria-hidden>🔥</span><h1>{title}</h1></div>
-      <a className="iconbtn" href="/scoring" aria-label="Scoring rules" title="Scoring rules"><IconRules /></a>
+    <AppBar title={title} brand back={{ label: 'All seasons', href: '/', reload: true }}>
+      <RulesLink />
       <button type="button" className={`iconbtn ${refreshing ? 'spin' : ''}`} onClick={() => load(true)} disabled={refreshing || loading}
         aria-label={refreshing ? 'Syncing scores' : 'Refresh scores'} title="Refresh scores"><IconRefresh /></button>
-      <PushToggle variant="icon" onHint={setHint} />
-    </header>
+    </AppBar>
   );
 
   if (loading || !data?.meta || !base) return (
@@ -192,7 +188,6 @@ export default function Dashboard({ season }: { season: number }) {
       <style>{CSS}</style>
       <style>{PAGE_CSS}</style>
       {appBar}
-      {hint && <p className="hint" role="status">{hint}</p>}
       <div className="wrap">
         <nav className={`weekbar ${k < last ? 'past' : ''}`} aria-label="Week">
           <button type="button" className="iconbtn" aria-label="Previous week" disabled={sw.length === 0 || k <= 0} onClick={() => goTo(k - 1)}><IconPrev /></button>

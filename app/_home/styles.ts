@@ -1,20 +1,9 @@
 // Homepage stylesheet, scoped under .home and rendered by app/page.tsx only (same approach as the
-// dashboard's dash/styles.ts). Colors are the Fantasy Survivor design-system tokens.
+// dashboard's dash/styles.ts). Colors are the shared tokens in app/globals.css.
 export const HOME_CSS = `
-.home{--bg:#0c0a09;--panel:#1c1917;--panel2:#262220;--line:#2f2a27;--text:#fafaf9;--soft:#d6d3d1;--muted:#a8a29e;--faint:#78716c;
-  --accent:#f59e0b;--accent2:#f97316;--gold:#fcd34d;--neg:#f87171;--pos:#4ade80;
-  max-width:560px;margin:0 auto;padding-bottom:40px;color:var(--text)}
+.home{max-width:560px;margin:0 auto;padding-bottom:40px;color:var(--text)}
 .home a{color:inherit;text-decoration:none}
 .home .num{font-variant-numeric:tabular-nums}
-.home .bar{display:flex;align-items:center;gap:8px;height:56px;padding:0 6px 0 16px;border-bottom:1px solid var(--line)}
-.home .bar .torch{font-size:20px;line-height:1}
-.home .bar h1{flex:1;margin:0;font-size:19px;font-weight:800;letter-spacing:-.02em;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.home .iconbtn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:999px;color:var(--soft)}
-.home .iconbtn{background:none;border:0;cursor:pointer}
-.home .iconbtn:hover{background:var(--panel)}
-.home .iconbtn:disabled{opacity:.5;cursor:default}
-.home .iconbtn.on{color:var(--accent)}
-.home .hint{margin:8px auto 0;max-width:420px;font-size:12px;color:var(--muted);line-height:1.45;text-align:center;padding:0 16px}
 .home main{padding:16px 16px 0;display:flex;flex-direction:column;gap:16px}
 .home .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 16px 16px}
 .home .eyebrow{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}

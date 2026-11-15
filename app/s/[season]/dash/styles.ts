@@ -1,11 +1,7 @@
 // Dashboard stylesheet. Rendered in a <style> tag by the dashboard only (so nothing leaks into the
-// draft room, which shares this route). Colors are the Fantasy Survivor design-system tokens.
+// draft room, which shares this route). Colors are the shared tokens in app/globals.css.
 export const CSS = `
-.dash{--bg:#0c0a09;--panel:#1c1917;--sunk:#1f1b19;--panel2:#262220;--line:#2f2a27;--line2:#3a342f;
-  --text:#fafaf9;--soft:#d6d3d1;--muted:#a8a29e;--faint:#78716c;--dim:#57534e;--disabled:#44403c;
-  --accent:#f59e0b;--accent2:#f97316;--gold:#fcd34d;--neg:#f87171;--pos:#4ade80;
-  --grad:linear-gradient(90deg,var(--accent),var(--accent2));
-  color:var(--text);min-height:100vh;padding-bottom:48px}
+.dash{color:var(--text);min-height:100vh;padding-bottom:48px}
 .dash *{box-sizing:border-box}
 .dash button{font:inherit;color:inherit}
 .dash :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
@@ -16,17 +12,13 @@ export const CSS = `
 .dash .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* app bar */
-.dash .appbar{display:flex;align-items:center;gap:2px;height:56px;padding:0 6px;border-bottom:1px solid var(--line);max-width:720px;margin:0 auto}
+.dash .appbar{max-width:720px}
 .dash .iconbtn{width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:999px;background:none;border:0;color:var(--soft);cursor:pointer;text-decoration:none}
 .dash .iconbtn:hover{background:var(--panel)}
 .dash .iconbtn:disabled{opacity:.5;cursor:default}
 .dash .iconbtn.on{color:var(--accent)}
 .dash .iconbtn.spin svg{animation:dspin 1s linear infinite}
 @keyframes dspin{to{transform:rotate(360deg)}}
-.dash .brand{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
-.dash .brand .torch{font-size:20px;line-height:1}
-.dash .brand h1{margin:0;font-size:19px;font-weight:800;letter-spacing:-.02em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dash .hint{margin:8px auto 0;max-width:420px;font-size:12px;color:var(--muted);line-height:1.45;text-align:center;padding:0 16px}
 
 /* week bar */
 .dash .weekbar{display:flex;align-items:center;height:48px;padding:0 2px;margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:999px}

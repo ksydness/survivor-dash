@@ -469,6 +469,14 @@ and a pasted PAT does not help — don't ask for one. Env var changes need a red
   History and past seasons. The sheet keeps the full name (voters and colors match by the people in it) —
   add new nicknames to `NICKNAMES`, not the sheet. Tests: `lib/teamNames.test.ts`.
 
+## Shared top bar (`app/AppBar.tsx`, 2026-11-15)
+
+Every page uses one header: `<AppBar title back? brand? onTitleClick? bell?>actions</AppBar>` — optional
+back button (`href`, `href` + `reload` for a full page load, or `onClick`), title (`brand` = 🔥 + gradient,
+for the homepage and season pages; plain elsewhere), page actions as children (`RulesLink`, the dashboard's
+Refresh), then the notifications bell with its hint line underneath. Styles: `.appbar` in `app/globals.css`.
+The draft room keeps its own header (shared with bakeoff-dash).
+
 ## Homepage (`app/page.tsx`)
 
 Server-rendered from the same data as the dashboard (nothing re-scored). Styles: `app/_home/styles.ts`
@@ -487,7 +495,7 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
 4. **Notify me** card — `PushToggle variant="card"`, a nudge only for people who haven't turned
    notifications on: hidden once they're on (a one-visit "You're set" right after turning on), when
    the browser has blocked them, or for good on that device after its × (`localStorage`
-   `survivor-notify-card-dismissed`). The bell in the top bar (`_home/HomeBar.tsx`, `variant="icon"`)
+   `survivor-notify-card-dismissed`). The bell in the top bar (`app/AppBar.tsx`, `variant="icon"`)
    is always there to turn them on/off; toggles on one page stay in sync via a `survivor-push-state`
    window event.
 5. **All-time titles** (History tab, via `historyModel`) with a link to the History tab.
@@ -495,12 +503,12 @@ Server-rendered from the same data as the dashboard (nothing re-scored). Styles:
 
 ## Dashboard tabs
 
-`app/s/[season]/dashboard.tsx` is the shell (compact app bar, full-width week picker, one swipeable
+`app/s/[season]/dashboard.tsx` is the shell (the shared app bar, full-width week picker, one swipeable
 row of tabs, `?tab=` and `?week=` kept in the URL). Each tab lives in `app/s/[season]/dash/`.
 Design rule on every tab: **the answer people come for sits up top; deeper data is one tap away**
 (player cards, team breakdowns, "Dig deeper" sections that start closed). Design references: the
 "Survivor Dash — UX Mockups" canvas and the "Fantasy Survivor" design system (colors = its tokens,
-declared once as CSS variables in `dash/styles.ts`).
+declared once as CSS variables on `:root` in `app/globals.css` and used by every page's stylesheet).
 
 - `dash/model.ts` — pure helpers + derived data (re-exports `colorFor`, `asOf` week rewind,
   standings with rank movement / points back / players left, the auto-written week recap, draft
@@ -531,8 +539,7 @@ The default pill variant is unchanged, so bakeoff-dash's copy still matches if i
 ## Status / next steps
 
 Live at https://survivor-dash.vercel.app with seasons 46–50 final and Season 51 `active` (the
-first season drafted in the live draft room). `prototype/index.html` is the original design
-reference. Ideas not yet built: returning-player context in the draft room, a search/filter box for
+first season drafted in the live draft room). Ideas not yet built: returning-player context in the draft room, a search/filter box for
 the 24-name pool, marking a contestant "out before the draft", an optional join code for picks, and
 the parked `future-db/` scoring migration.
 
